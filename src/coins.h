@@ -45,7 +45,7 @@ public:
     bool IsCoinBase() const { return nHeightAndIsCoinBase & 0x01; }
     bool IsSpent() const { return out.IsNull(); }
 
-    CTxOut &GetTxOut() { return out; }
+    CTxOut &GetTxOut() { return out; }  
     const CTxOut &GetTxOut() const { return out; }
 
     void Clear() {

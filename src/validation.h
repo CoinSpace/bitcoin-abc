@@ -20,6 +20,11 @@
 #include "script/script_error.h"
 #include "sync.h"
 #include "versionbits.h"
+#include "addressindex.h"  
+#include "timestampindex.h"  
+#include "spentindex.h"  
+#include "txmempool.h"  
+#include "dbwrapper.h"
 
 #include <algorithm>
 #include <atomic>
@@ -43,6 +48,7 @@ class CTxMemPool;
 class CTxUndo;
 class CValidationInterface;
 class CValidationState;
+class CCoinsViewDB;
 struct ChainTxData;
 
 struct PrecomputedTransactionData;
@@ -171,6 +177,9 @@ static const int64_t MAX_FEE_ESTIMATION_TIP_AGE = 3 * 60 * 60;
 static const bool DEFAULT_PERMIT_BAREMULTISIG = true;
 static const bool DEFAULT_CHECKPOINTS_ENABLED = true;
 static const bool DEFAULT_TXINDEX = false;
+static const bool DEFAULT_ADDRESSINDEX = false;
+static const bool DEFAULT_TIMESTAMPINDEX = false;
+static const bool DEFAULT_SPENTINDEX = false;
 static const unsigned int DEFAULT_BANSCORE_THRESHOLD = 100;
 
 /** Default for -persistmempool */
@@ -391,6 +400,14 @@ bool IsInitialBlockDownload();
  * by strFor.
  */
 std::string GetWarnings(const std::string &strFor);
+
+bool GetTimestampIndex(const unsigned int &high, const unsigned int &low, const bool fActiveOnly, std::vector<std::pair<uint256, unsigned int> > &hashes);  
+bool GetSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value);  
+bool GetAddressIndex(uint160 addressHash, int type,  
+                     std::vector<std::pair<CAddressIndexKey, Amount> > &addressIndex,
+                     int start = 0, int end = 0);  
+bool GetAddressUnspent(uint160 addressHash, int type,  
+                       std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > &unspentOutputs);
 
 /**
  * Retrieve a transaction (from memory pool, or from disk, if possible).

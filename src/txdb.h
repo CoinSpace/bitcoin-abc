@@ -9,6 +9,10 @@
 #include "chain.h"
 #include "coins.h"
 #include "dbwrapper.h"
+#include "spentindex.h"
+#include "addressindex.h"
+#include "timestampindex.h"
+#include "validation.h"
 
 #include <map>
 #include <string>
@@ -19,6 +23,13 @@ class CBlockIndex;
 class CCoinsViewDBCursor;
 class uint256;
 class Config;
+
+struct CAddressIndexKey;  
+struct CAddressUnspentKey;  
+struct CAddressUnspentValue;  
+struct CTimestampIndexKey;  
+struct CTimestampBlockIndexKey;  
+struct CTimestampBlockIndexValue;
 
 //! No need to periodic flush if at least this much space still available.
 static constexpr int MAX_BLOCK_COINSDB_USAGE = 10;
@@ -122,6 +133,17 @@ public:
     bool WriteReindexing(bool fReindex);
     bool ReadReindexing(bool &fReindex);
     bool ReadTxIndex(const uint256 &txid, CDiskTxPos &pos);
+    bool ReadSpentIndex(CSpentIndexKey& key, CSpentIndexValue& value);  
+    bool UpdateSpentIndex(const std::vector<std::pair<CSpentIndexKey, CSpentIndexValue> >& vect);  
+    bool UpdateAddressUnspentIndex(const std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> >& vect);  
+    bool ReadAddressUnspentIndex(uint160 addressHash, int type, std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> >& vect);  
+    bool WriteAddressIndex(const std::vector<std::pair<CAddressIndexKey, Amount> >& vect);  
+    bool EraseAddressIndex(const std::vector<std::pair<CAddressIndexKey, Amount> >& vect);  
+    bool ReadAddressIndex(uint160 addressHash, int type, std::vector<std::pair<CAddressIndexKey, Amount> >& addressIndex, int start = 0, int end = 0);  
+    bool WriteTimestampIndex(const CTimestampIndexKey& timestampIndex);  
+    bool ReadTimestampIndex(const unsigned int& high, const unsigned int& low, const bool fActiveOnly, std::vector<std::pair<uint256, unsigned int> >& vect);  
+    bool WriteTimestampBlockIndex(const CTimestampBlockIndexKey& blockhashIndex, const CTimestampBlockIndexValue& logicalts);  
+    bool ReadTimestampBlockIndex(const uint256& hash, unsigned int& logicalTS);
     bool WriteTxIndex(const std::vector<std::pair<uint256, CDiskTxPos>> &list);
     bool WriteFlag(const std::string &name, bool fValue);
     bool ReadFlag(const std::string &name, bool &fValue);

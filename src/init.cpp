@@ -455,6 +455,18 @@ std::string HelpMessage(HelpMessageMode mode) {
                                 "the getrawtransaction rpc call (default: %d)"),
                               DEFAULT_TXINDEX));
     strUsage += HelpMessageOpt(
+        "-addressindex", strprintf(_("Maintain a full address index, used by "
+                                "the ... rpc call (default: %d)"),
+                              DEFAULT_ADDRESSINDEX));
+    strUsage += HelpMessageOpt(
+        "-timestampindex", strprintf(_("Maintain a full timestamp index, used by "
+                                "the ... rpc call (default: %d)"),
+                              DEFAULT_TIMESTAMPINDEX));
+    strUsage += HelpMessageOpt(
+        "-spentindex", strprintf(_("Maintain a full spent index, used by "
+                                "the ... rpc call (default: %d)"),
+                              DEFAULT_SPENTINDEX));
+    strUsage += HelpMessageOpt(
         "-usecashaddr", _("Use Cash Address for destination encoding instead "
                           "of base58 (activate by default on Jan, 14)"));
 
