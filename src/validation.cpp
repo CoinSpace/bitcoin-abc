@@ -2348,6 +2348,34 @@ static bool ConnectBlock(const Config &config, const CBlock &block,
             }  
         }
 
+        if (fAddressIndex) { 
+            for (unsigned int k = 0; k < tx.vout.size(); k++) { 
+                const CTxOut &out = tx.vout[k]; 
+
+                if (out.scriptPubKey.IsPayToScriptHash()) { 
+                    std::vector<unsigned char> hashBytes(out.scriptPubKey.begin()+2, out.scriptPubKey.begin()+22); 
+
+                    // record receiving activity 
+                    addressIndex.push_back(std::make_pair(CAddressIndexKey(2, uint160(hashBytes), pindex->nHeight, i, txhash, k, false), out.nValue)); 
+
+                    // record unspent output 
+                    addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(2, uint160(hashBytes), txhash, k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->nHeight))); 
+
+                } else if (out.scriptPubKey.IsPayToPublicKeyHash()) { 
+                    std::vector<unsigned char> hashBytes(out.scriptPubKey.begin()+3, out.scriptPubKey.begin()+23); 
+
+                    // record receiving activity 
+                    addressIndex.push_back(std::make_pair(CAddressIndexKey(1, uint160(hashBytes), pindex->nHeight, i, txhash, k, false), out.nValue)); 
+
+                    // record unspent output 
+                    addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(1, uint160(hashBytes), txhash, k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->nHeight))); 
+
+                } else { 
+                    continue;
+                } 
+            } 
+        }
+
         // GetTransactionSigOpCount counts 2 types of sigops:
         // * legacy (always)
         // * p2sh (when P2SH enabled in flags and excludes coinbase)
