@@ -370,6 +370,9 @@ public:
                 // Nov, 13. DAA activation block.
                 {1188697, uint256S("0000000000170ed0918077bde7b4d36cc4c91be69fa"
                                    "09211f748240dabe047fb")},
+                // Great wall activation.
+                {1303885, uint256S("00000000000000479138892ef0e4fa478ccc938fb94"
+                                   "df862ef5bde7e8dee23d3")},
             }};
 
         // Data as of block
