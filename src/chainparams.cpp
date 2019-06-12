@@ -287,12 +287,12 @@ public:
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S(
-            "000000000000000000000000000000000000000000000030015a07e503af3227");
+            "00000000000000000000000000000000000000000000004c83317c9efa4724bd");
 
         // By default assume that the signatures in ancestors of this block are
         // valid.
         consensus.defaultAssumeValid = uint256S(
-            "00000000000000ba5624709777f8df34b911c16a33a474562aec7360580218cc");
+            "00000000000000479138892ef0e4fa478ccc938fb94df862ef5bde7e8dee23d3");
 
         // August 1, 2017 hard fork
         consensus.uahfHeight = 1155875;
@@ -303,8 +303,14 @@ public:
         // Nov 15, 2018 hard fork
         consensus.magneticAnomalyActivationTime = 1542300000;
 
+        // November 15, 2018 hard fork
+        // consensus.magneticAnomalyHeight = 1267996;
+
         // Wed, 15 May 2019 12:00:00 UTC hard fork
         consensus.greatWallActivationTime = 1557921600;
+
+        // Nov 15, 2019 12:00:00 UTC protocol upgrade
+        // consensus.gravitonActivationTime = 1573819200;
 
         diskMagic[0] = 0x0b;
         diskMagic[1] = 0x11;
@@ -355,7 +361,6 @@ public:
         vFixedSeeds = std::vector<SeedSpec6>(
             pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
 
-        fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
         fRequireStandard = false;
         fMineBlocksOnDemand = false;
