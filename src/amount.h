@@ -18,14 +18,14 @@ struct Amount {
 private:
     int64_t amount;
 
-    explicit constexpr Amount(int64_t _amount) : amount(_amount) {}
-
 public:
     constexpr Amount() : amount(0) {}
     constexpr Amount(const Amount &_camount) : amount(_camount.amount) {}
+    explicit constexpr Amount(int64_t _amount) : amount(_amount) {}
 
     static constexpr Amount zero() { return Amount(0); }
     static constexpr Amount satoshi() { return Amount(1); }
+    int64_t GetSatoshis() const { return *this / Amount(1); }
 
     /**
      * Implement standard operators

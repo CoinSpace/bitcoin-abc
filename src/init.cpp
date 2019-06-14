@@ -497,6 +497,21 @@ void SetupServerArgs() {
                              "getrawtransaction rpc call (default: %d)"),
                            DEFAULT_TXINDEX),
                  false, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-addressindex",
+                 strprintf(_("Maintain a full address index, used by the "
+                             "... rpc call (default: %d)"),
+                           DEFAULT_ADDRESSINDEX),
+                 false, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-timestampindex",
+                 strprintf(_("Maintain a full timestamp index, used by the "
+                             "... rpc call (default: %d)"),
+                           DEFAULT_TIMESTAMPINDEX),
+                 false, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-spentindex",
+                 strprintf(_("Maintain a full transaction index, used by the "
+                             "... rpc call (default: %d)"),
+                           DEFAULT_SPENTINDEX),
+                 false, OptionsCategory::OPTIONS);
     gArgs.AddArg("-usecashaddr",
                  _("Use Cash Address for destination encoding instead "
                    "of base58 (activate by default on Jan, 14)"),

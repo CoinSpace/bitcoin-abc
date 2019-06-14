@@ -37,6 +37,86 @@
 
 #include <univalue.h>
 
+void TxToJSONExpanded(const Config &config, const CTransaction& tx, const uint256 hashBlock, UniValue& entry,  
+                      int nHeight = 0, int nConfirmations = 0, int nBlockTime = 0)  
+{  
+
+    uint256 txid = tx.GetHash();  
+    entry.push_back(Pair("txid", txid.GetHex()));  
+    entry.push_back(Pair("size", (int)::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));  
+    entry.push_back(Pair("version", tx.nVersion));  
+    entry.push_back(Pair("locktime", (int64_t)tx.nLockTime));  
+    UniValue vin(UniValue::VARR);  
+    for (const CTxIn &txin : tx.vin) {  
+        UniValue in(UniValue::VOBJ);  
+        if (tx.IsCoinBase())  
+            in.push_back(Pair("coinbase", HexStr(txin.scriptSig.begin(), txin.scriptSig.end())));  
+        else {  
+            in.push_back(Pair("txid", txin.prevout.GetTxId().GetHex()));  
+            in.push_back(Pair("vout", (int64_t)txin.prevout.GetN()));  
+            UniValue o(UniValue::VOBJ);  
+            o.push_back(Pair("asm", ScriptToAsmStr(txin.scriptSig, true)));  
+            o.push_back(Pair("hex", HexStr(txin.scriptSig.begin(), txin.scriptSig.end())));  
+            in.push_back(Pair("scriptSig", o));  
+
+            // Add address and value info if spentindex enabled  
+            CSpentIndexValue spentInfo;
+            CSpentIndexKey spentKey(txin.prevout.GetTxId(), txin.prevout.GetN());  
+            if (GetSpentIndex(spentKey, spentInfo)) {  
+                in.push_back(Pair("value", ValueFromAmount(spentInfo.satoshis)));  
+                in.push_back(Pair("valueSat", spentInfo.satoshis.GetSatoshis()));
+                if (spentInfo.addressType == 1) {  
+                    in.push_back(Pair("address", CBitcoinAddress(CKeyID(spentInfo.addressHash)).ToString()));
+                } else if (spentInfo.addressType == 2)  {  
+                    in.push_back(Pair("address", CBitcoinAddress(CScriptID(spentInfo.addressHash)).ToString()));
+                }  
+            }  
+
+        }  
+        in.push_back(Pair("sequence", (int64_t)txin.nSequence));  
+        vin.push_back(in); 
+    }  
+    entry.push_back(Pair("vin", vin));  
+    UniValue vout(UniValue::VARR);  
+    for (unsigned int i = 0; i < tx.vout.size(); i++) {  
+        const CTxOut& txout = tx.vout[i];  
+        UniValue out(UniValue::VOBJ);  
+        out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
+        out.push_back(Pair("valueSat", txout.nValue.GetSatoshis()));
+        out.push_back(Pair("n", (int64_t)i));  
+        UniValue o(UniValue::VOBJ);  
+        ScriptPubKeyToUniv(txout.scriptPubKey, o, true);
+        out.push_back(Pair("scriptPubKey", o));  
+
+        // Add spent information if spentindex is enabled  
+        CSpentIndexValue spentInfo;  
+        CSpentIndexKey spentKey(txid, i);  
+        if (GetSpentIndex(spentKey, spentInfo)) {  
+            out.push_back(Pair("spentTxId", spentInfo.txid.GetHex()));  
+            out.push_back(Pair("spentIndex", (int)spentInfo.inputIndex));  
+            out.push_back(Pair("spentHeight", spentInfo.blockHeight));  
+        }  
+
+        vout.push_back(out);  
+    }  
+    entry.push_back(Pair("vout", vout));  
+
+    if (!hashBlock.IsNull()) {  
+        entry.push_back(Pair("blockhash", hashBlock.GetHex()));  
+
+        if (nConfirmations > 0) {  
+            entry.push_back(Pair("height", nHeight));  
+            entry.push_back(Pair("confirmations", nConfirmations));  
+            entry.push_back(Pair("time", nBlockTime));  
+            entry.push_back(Pair("blocktime", nBlockTime));  
+        } else {  
+            entry.push_back(Pair("height", -1));  
+            entry.push_back(Pair("confirmations", 0));  
+        }  
+    }  
+
+}
+
 static void TxToJSON(const CTransaction &tx, const uint256 hashBlock,
                      UniValue &entry) {
     // Call into TxToUniv() in bitcoin-common to decode the transaction hex.
@@ -53,12 +133,14 @@ static void TxToJSON(const CTransaction &tx, const uint256 hashBlock,
         CBlockIndex *pindex = LookupBlockIndex(hashBlock);
         if (pindex) {
             if (chainActive.Contains(pindex)) {
+                entry.push_back(Pair("height", pindex->nHeight));
                 entry.pushKV("confirmations",
                              1 + chainActive.Height() - pindex->nHeight);
                 entry.pushKV("time", pindex->GetBlockTime());
                 entry.pushKV("blocktime", pindex->GetBlockTime());
             } else {
                 entry.pushKV("confirmations", 0);
+                entry.push_back(Pair("height", -1));
             }
         }
     }
@@ -204,6 +286,9 @@ static UniValue getrawtransaction(const Config &config,
 
     CTransactionRef tx;
     uint256 hash_block;
+    int nHeight = 0;  
+    int nConfirmations = 0;  
+    int nBlockTime = 0;
     if (!GetTransaction(config, txid, tx, hash_block, true, blockindex)) {
         std::string errmsg;
         if (blockindex) {
@@ -225,6 +310,20 @@ static UniValue getrawtransaction(const Config &config,
                                ". Use gettransaction for wallet transactions.");
     }
 
+    BlockMap::iterator mi = mapBlockIndex.find(hash_block);
+    if (mi != mapBlockIndex.end() && (*mi).second) {  
+        CBlockIndex* pindex = (*mi).second;  
+        if (chainActive.Contains(pindex)) {  
+            nHeight = pindex->nHeight;  
+            nConfirmations = 1 + chainActive.Height() - pindex->nHeight;  
+            nBlockTime = pindex->GetBlockTime();  
+        } else {  
+            nHeight = -1;  
+            nConfirmations = 0;  
+            nBlockTime = pindex->GetBlockTime();  
+        }  
+    }
+
     if (!fVerbose) {
         return EncodeHexTx(*tx, RPCSerializationFlags());
     }
@@ -233,7 +332,8 @@ static UniValue getrawtransaction(const Config &config,
     if (blockindex) {
         result.pushKV("in_active_chain", in_active_chain);
     }
-    TxToJSON(*tx, hash_block, result);
+    // TxToJSON(*tx, hash_block, result);
+    TxToJSONExpanded(config, *tx, hash_block, result, nHeight, nConfirmations, nBlockTime);
     return result;
 }
 

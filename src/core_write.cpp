@@ -234,10 +234,6 @@ void TxToUniv(const CTransaction &tx, const uint256 &hashBlock, UniValue &entry,
 
     entry.pushKV("vout", vout);
 
-    if (!hashBlock.IsNull()) {
-        entry.pushKV("blockhash", hashBlock.GetHex());
-    }
-
     if (include_hex) {
         // the hex-encoded transaction. used the name "hex" to be consistent
         // with the verbose output of "getrawtransaction".
