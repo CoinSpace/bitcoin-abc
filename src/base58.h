@@ -49,18 +49,6 @@ bool DecodeBase58(const std::string &str, std::vector<uint8_t> &vchRet);
 std::string EncodeBase58Check(const std::vector<uint8_t> &vchIn);
 
 /**
- * Decode a base58-encoded string (psz) that includes a checksum into a byte
- * vector (vchRet), return true if decoding is successful
- */
-bool DecodeBase58Check(const char *psz, std::vector<uint8_t> &vchRet);
-
-/**
- * Decode a base58-encoded string (str) that includes a checksum into a byte
- * vector (vchRet), return true if decoding is successful
- */
-bool DecodeBase58Check(const std::string &str, std::vector<uint8_t> &vchRet);
-
-/**
  * Base class for all base58-encoded data
  */
 class CBase58Data {
@@ -168,8 +156,6 @@ typedef CBitcoinExtKeyBase<CExtPubKey, BIP32_EXTKEY_SIZE,
                            CChainParams::EXT_PUBLIC_KEY>
     CBitcoinExtPubKey;
 
-std::string EncodeLegacyAddr(const CTxDestination &dest, const CChainParams &);
-CTxDestination DecodeLegacyAddr(const std::string &str, const CChainParams &);
 bool DecodeBase58Check(const std::string &str, std::vector<uint8_t> &vchRet);
 
 #endif // BITCOIN_BASE58_H
