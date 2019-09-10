@@ -21,7 +21,7 @@
 #include <coins.h>
 #include <consensus/consensus.h>
 #include <consensus/params.h>
-#include <diskblockpos.h>
+#include <flatfile.h>
 #include <fs.h>
 #include <protocol.h> // For CMessageHeader::MessageMagic
 #include <script/script_error.h>
@@ -62,9 +62,9 @@ struct LockPoints;
 #define MIN_TRANSACTION_SIZE                                                   \
     (::GetSerializeSize(CTransaction(), SER_NETWORK, PROTOCOL_VERSION))
 
-/** Default for DEFAULT_WHITELISTRELAY. */
+/** Default for -whitelistrelay. */
 static const bool DEFAULT_WHITELISTRELAY = true;
-/** Default for DEFAULT_WHITELISTFORCERELAY. */
+/** Default for -whitelistforcerelay. */
 static const bool DEFAULT_WHITELISTFORCERELAY = true;
 /** Default for -minrelaytxfee, minimum relay fee for transactions */
 static const Amount DEFAULT_MIN_RELAY_TX_FEE_PER_KB(1000 * SATOSHI);
@@ -234,6 +234,11 @@ extern bool fCheckpointsEnabled;
 extern size_t nCoinCacheUsage;
 
 /**
+ * A fee rate smaller than this is considered zero fee (for relaying, mining and
+ * transaction creation)
+ */
+extern CFeeRate minRelayTxFee;
+/**
  * Absolute maximum transaction fee (in satoshis) used by wallet and mempool
  * (rejects high fee in sendrawtransaction)
  */
@@ -259,9 +264,6 @@ extern arith_uint256 nMinimumChainWork;
  * Best header we've seen so far (used for getheaders queries' starting points).
  */
 extern CBlockIndex *pindexBestHeader;
-
-/** Minimum disk space required - used in CheckDiskSpace() */
-static const uint64_t nMinDiskSpace = 52428800;
 
 /** Pruning-related variables and constants */
 /** True if any block files have ever been pruned. */
@@ -355,11 +357,6 @@ bool ProcessNewBlockHeaders(const Config &config,
                             CBlockHeader *first_invalid = nullptr);
 
 /**
- * Check whether enough disk space is available for an incoming block.
- */
-bool CheckDiskSpace(uint64_t nAdditionalBytes = 0, bool blocks_dir = false);
-
-/**
  * Open a block file (blk?????.dat).
  */
 FILE *OpenBlockFile(const CDiskBlockPos &pos, bool fReadOnly = false);
@@ -367,7 +364,7 @@ FILE *OpenBlockFile(const CDiskBlockPos &pos, bool fReadOnly = false);
 /**
  * Translation to a filesystem path.
  */
-fs::path GetBlockPosFilename(const CDiskBlockPos &pos, const char *prefix);
+fs::path GetBlockPosFilename(const CDiskBlockPos &pos);
 
 /**
  * Import blocks from an external file.
@@ -550,7 +547,7 @@ private:
 public:
     CScriptCheck()
         : amount(), ptxTo(nullptr), nIn(0), nFlags(0), cacheStore(false),
-          error(SCRIPT_ERR_UNKNOWN_ERROR), txdata() {}
+          error(ScriptError::UNKNOWN), txdata() {}
 
     CScriptCheck(const CScript &scriptPubKeyIn, const Amount amountIn,
                  const CTransaction &txToIn, unsigned int nInIn,
@@ -558,7 +555,7 @@ public:
                  const PrecomputedTransactionData &txdataIn)
         : scriptPubKey(scriptPubKeyIn), amount(amountIn), ptxTo(&txToIn),
           nIn(nInIn), nFlags(nFlagsIn), cacheStore(cacheIn),
-          error(SCRIPT_ERR_UNKNOWN_ERROR), txdata(txdataIn) {}
+          error(ScriptError::UNKNOWN), txdata(txdataIn) {}
 
     bool operator()();
 

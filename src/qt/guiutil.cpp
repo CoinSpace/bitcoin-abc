@@ -4,13 +4,11 @@
 
 #include <qt/guiutil.h>
 
-#include <base58.h>
-#include <cashaddr.h>
+#include <cashaddrenc.h>
 #include <chainparams.h>
-#include <config.h>
-#include <dstencode.h>
 #include <fs.h>
 #include <interfaces/node.h>
+#include <key_io.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <protocol.h>
@@ -98,45 +96,43 @@ QFont fixedPitchFont() {
 #endif
 }
 
-static std::string MakeAddrInvalid(std::string addr, const Config &config) {
+static std::string MakeAddrInvalid(std::string addr,
+                                   const CChainParams &params) {
     if (addr.size() < 2) {
         return "";
     }
 
     // Checksum is at the end of the address. Swapping chars to make it invalid.
     std::swap(addr[addr.size() - 1], addr[addr.size() - 2]);
-    if (!IsValidDestinationString(addr, config.GetChainParams())) {
+    if (!IsValidDestinationString(addr, params)) {
         return addr;
     }
 
     return "";
 }
 
-std::string DummyAddress(const Config &config) {
-    // Just some dummy data to generate an convincing random-looking (but
+std::string DummyAddress(const CChainParams &params) {
+    // Just some dummy data to generate a convincing random-looking (but
     // consistent) address
     static const std::vector<uint8_t> dummydata = {
         0xeb, 0x15, 0x23, 0x1d, 0xfc, 0xeb, 0x60, 0x92, 0x58, 0x86,
         0xb6, 0x7d, 0x06, 0x52, 0x99, 0x92, 0x59, 0x15, 0xae, 0xb1};
 
     const CTxDestination dstKey = CKeyID(uint160(dummydata));
-    return MakeAddrInvalid(EncodeDestination(dstKey, config), config);
+    return MakeAddrInvalid(EncodeCashAddr(dstKey, params), params);
 }
 
 // Addresses are stored in the database with the encoding that the client was
 // configured with at the time of creation.
 //
-// This converts to clients current configuration.
-QString convertToConfiguredAddressFormat(const Config &config,
-                                         const QString &addr) {
-    if (!IsValidDestinationString(addr.toStdString(),
-                                  config.GetChainParams())) {
+// This converts to cashaddr.
+QString convertToCashAddr(const CChainParams &params, const QString &addr) {
+    if (!IsValidDestinationString(addr.toStdString(), params)) {
         // We have something sketchy as input. Do not try to convert.
         return addr;
     }
-    CTxDestination dst =
-        DecodeDestination(addr.toStdString(), config.GetChainParams());
-    return QString::fromStdString(EncodeDestination(dst, config));
+    CTxDestination dst = DecodeDestination(addr.toStdString(), params);
+    return QString::fromStdString(EncodeCashAddr(dst, params));
 }
 
 void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent) {
@@ -147,7 +143,7 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent) {
     // and this is the only place, where this address is supplied.
     widget->setPlaceholderText(
         QObject::tr("Enter a Bitcoin address (e.g. %1)")
-            .arg(QString::fromStdString(DummyAddress(GetConfig()))));
+            .arg(QString::fromStdString(DummyAddress(Params()))));
     widget->setValidator(
         new BitcoinAddressEntryValidator(Params().CashAddrPrefix(), parent));
     widget->setCheckValidator(new BitcoinAddressCheckValidator(parent));
@@ -161,24 +157,6 @@ void setupAmountWidget(QLineEdit *widget, QWidget *parent) {
     widget->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 }
 
-QString bitcoinURIScheme(const CChainParams &params, bool useCashAddr) {
-    if (!useCashAddr) {
-        return "bitcoincash";
-    }
-    return QString::fromStdString(params.CashAddrPrefix());
-}
-
-QString bitcoinURIScheme(const Config &config) {
-    return bitcoinURIScheme(config.GetChainParams(),
-                            config.UseCashAddrEncoding());
-}
-
-static bool IsCashAddrEncoded(const QUrl &uri) {
-    const std::string addr = (uri.scheme() + ":" + uri.path()).toStdString();
-    auto decoded = cashaddr::Decode(addr, "");
-    return !decoded.first.empty();
-}
-
 bool parseBitcoinURI(const QString &scheme, const QUrl &uri,
                      SendCoinsRecipient *out) {
     // return if URI has wrong scheme.
@@ -187,12 +165,8 @@ bool parseBitcoinURI(const QString &scheme, const QUrl &uri,
     }
 
     SendCoinsRecipient rv;
-    if (IsCashAddrEncoded(uri)) {
-        rv.address = uri.scheme() + ":" + uri.path();
-    } else {
-        // strip out uri scheme for base58 encoded addresses
-        rv.address = uri.path();
-    }
+    rv.address = uri.scheme() + ":" + uri.path();
+
     // Trim any following forward slash which may have been added by the OS
     if (rv.address.endsWith("/")) {
         rv.address.truncate(rv.address.length() - 1);
@@ -249,12 +223,8 @@ bool parseBitcoinURI(const QString &scheme, QString uri,
     return parseBitcoinURI(scheme, uriInstance, out);
 }
 
-QString formatBitcoinURI(const Config &config, const SendCoinsRecipient &info) {
-    QString ret = info.address;
-    if (!config.UseCashAddrEncoding()) {
-        // prefix address with uri scheme for base58 encoded addresses.
-        ret = (bitcoinURIScheme(config) + ":%1").arg(ret);
-    }
+QString formatBitcoinURI(const SendCoinsRecipient &info) {
+    QString ret = convertToCashAddr(Params(), info.address);
     int paramCount = 0;
 
     if (info.amount != Amount::zero()) {

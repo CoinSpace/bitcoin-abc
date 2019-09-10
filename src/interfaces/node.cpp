@@ -51,10 +51,13 @@ namespace interfaces {
 namespace {
 
     class NodeImpl : public Node {
-        void parseParameters(int argc, const char *const argv[]) override {
-            gArgs.ParseParameters(argc, argv);
+        bool parseParameters(int argc, const char *const argv[],
+                             std::string &error) override {
+            return gArgs.ParseParameters(argc, argv, error);
         }
-        void readConfigFiles() override { gArgs.ReadConfigFiles(); }
+        bool readConfigFiles(std::string &error) override {
+            return gArgs.ReadConfigFiles(error);
+        }
         bool softSetArg(const std::string &arg,
                         const std::string &value) override {
             return gArgs.SoftSetArg(arg, value);
@@ -207,23 +210,9 @@ namespace {
         bool getNetworkActive() override {
             return g_connman && g_connman->GetNetworkActive();
         }
-        Amount getMinimumFee(unsigned int tx_bytes,
-                             const CCoinControl &coin_control) override {
-            Amount result;
-            CHECK_WALLET(result =
-                             GetMinimumFee(tx_bytes, coin_control, g_mempool));
-            return result;
-        }
         Amount getMaxTxFee() override { return ::maxTxFee; }
         CFeeRate estimateSmartFee() override { return g_mempool.estimateFee(); }
         CFeeRate getDustRelayFee() override { return ::dustRelayFee; }
-        CFeeRate getFallbackFee() override {
-            CHECK_WALLET(return CWallet::fallbackFee);
-        }
-        CFeeRate getPayTxFee() override { CHECK_WALLET(return ::payTxFee); }
-        void setPayTxFee(CFeeRate rate) override {
-            CHECK_WALLET(::payTxFee = rate);
-        }
         UniValue executeRpc(Config &config, const std::string &command,
                             const UniValue &params,
                             const std::string &uri) override {
@@ -249,7 +238,7 @@ namespace {
         std::vector<std::unique_ptr<Wallet>> getWallets() override {
 #ifdef ENABLE_WALLET
             std::vector<std::unique_ptr<Wallet>> wallets;
-            for (CWalletRef wallet : ::vpwallets) {
+            for (CWallet *wallet : GetWallets()) {
                 wallets.emplace_back(MakeWallet(*wallet));
             }
             return wallets;

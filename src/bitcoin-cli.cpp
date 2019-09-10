@@ -35,6 +35,8 @@ static void SetupCliArgs() {
         CreateBaseChainParams(CBaseChainParams::TESTNET);
 
     gArgs.AddArg("-?", _("This help message"), false, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-version", "Print version and exit", false,
+                 OptionsCategory::OPTIONS);
     gArgs.AddArg("-conf=<file>",
                  strprintf(_("Specify configuration file (default: %s)"),
                            BITCOIN_CONF_FILENAME),
@@ -59,6 +61,11 @@ static void SetupCliArgs() {
         "-rpcconnect=<ip>",
         strprintf(_("Send commands to node running on <ip> (default: %s)"),
                   DEFAULT_RPCCONNECT),
+        false, OptionsCategory::OPTIONS);
+    gArgs.AddArg(
+        "-rpccookiefile=<loc>",
+        _("Location of the auth cookie. Relative paths will be prefixed by a "
+          "net-specific datadir location. (default: data dir)"),
         false, OptionsCategory::OPTIONS);
     gArgs.AddArg(
         "-rpcport=<port>",
@@ -94,6 +101,10 @@ static void SetupCliArgs() {
         _("Send RPC for non-default wallet on RPC server (needs to exactly "
           "match corresponding -wallet option passed to bitcoind)"),
         false, OptionsCategory::OPTIONS);
+
+    // Hidden
+    gArgs.AddArg("-h", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-help", "", false, OptionsCategory::HIDDEN);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -120,7 +131,12 @@ static int AppInitRPC(int argc, char *argv[]) {
     // Parameters
     //
     SetupCliArgs();
-    gArgs.ParseParameters(argc, argv);
+    std::string error;
+    if (!gArgs.ParseParameters(argc, argv, error)) {
+        fprintf(stderr, "Error parsing command line arguments: %s\n",
+                error.c_str());
+        return EXIT_FAILURE;
+    }
     if (argc < 2 || HelpRequested(gArgs) || gArgs.IsArgSet("-version")) {
         std::string strUsage =
             PACKAGE_NAME " RPC client version " + FormatFullVersion() + "\n";
@@ -152,10 +168,9 @@ static int AppInitRPC(int argc, char *argv[]) {
                 gArgs.GetArg("-datadir", "").c_str());
         return EXIT_FAILURE;
     }
-    try {
-        gArgs.ReadConfigFiles();
-    } catch (const std::exception &e) {
-        fprintf(stderr, "Error reading configuration file: %s\n", e.what());
+    if (!gArgs.ReadConfigFiles(error, true)) {
+        fprintf(stderr, "Error reading configuration file: %s\n",
+                error.c_str());
         return EXIT_FAILURE;
     }
     // Check for -testnet or -regtest parameter (BaseParams() calls are only
@@ -183,7 +198,7 @@ struct HTTPReply {
     std::string body;
 };
 
-const char *http_errorstring(int code) {
+static const char *http_errorstring(int code) {
     switch (code) {
 #if LIBEVENT_VERSION_NUMBER >= 0x02010300
         case EVREQ_HTTP_TIMEOUT:
@@ -240,6 +255,7 @@ static void http_error_cb(enum evhttp_request_error err, void *ctx) {
  */
 class BaseRequestHandler {
 public:
+    virtual ~BaseRequestHandler() {}
     virtual UniValue PrepareRequest(const std::string &method,
                                     const std::vector<std::string> &args) = 0;
     virtual UniValue ProcessReply(const UniValue &batch_in) = 0;
@@ -373,17 +389,12 @@ static UniValue CallRPC(BaseRequestHandler *rh, const std::string &strMethod,
 
     // Get credentials
     std::string strRPCUserColonPass;
+    bool failedToGetAuthCookie = false;
     if (gArgs.GetArg("-rpcpassword", "") == "") {
         // Try fall back to cookie-based authentication if no password is
         // provided
         if (!GetAuthCookie(&strRPCUserColonPass)) {
-            throw std::runtime_error(strprintf(
-                _("Could not locate RPC credentials. No authentication cookie "
-                  "could be found, and RPC password is not set.  See "
-                  "-rpcpassword and -stdinrpcpass.  Configuration file: (%s)"),
-                GetConfigFile(gArgs.GetArg("-conf", BITCOIN_CONF_FILENAME))
-                    .string()
-                    .c_str()));
+            failedToGetAuthCookie = true;
         }
     } else {
         strRPCUserColonPass = gArgs.GetArg("-rpcuser", "") + ":" +
@@ -430,13 +441,30 @@ static UniValue CallRPC(BaseRequestHandler *rh, const std::string &strMethod,
     event_base_dispatch(base.get());
 
     if (response.status == 0) {
-        throw CConnectionFailed(strprintf(
-            "couldn't connect to server: %s (code %d)\n(make sure server is "
-            "running and you are connecting to the correct RPC port)",
-            http_errorstring(response.error), response.error));
+        std::string responseErrorMessage;
+        if (response.error != -1) {
+            responseErrorMessage =
+                strprintf(" (error code %d - \"%s\")", response.error,
+                          http_errorstring(response.error));
+        }
+        throw CConnectionFailed(
+            strprintf("Could not connect to the server %s:%d%s\n\nMake sure "
+                      "the bitcoind server is running and that you are "
+                      "connecting to the correct RPC port.",
+                      host, port, responseErrorMessage));
     } else if (response.status == HTTP_UNAUTHORIZED) {
-        throw std::runtime_error(
-            "incorrect rpcuser or rpcpassword (authorization failed)");
+        if (failedToGetAuthCookie) {
+            throw std::runtime_error(strprintf(
+                _("Could not locate RPC credentials. No authentication cookie "
+                  "could be found, and RPC password is not set.  See "
+                  "-rpcpassword and -stdinrpcpass.  Configuration file: (%s)"),
+                GetConfigFile(gArgs.GetArg("-conf", BITCOIN_CONF_FILENAME))
+                    .string()
+                    .c_str()));
+        } else {
+            throw std::runtime_error(
+                "Authorization failed: Incorrect rpcuser or rpcpassword");
+        }
     } else if (response.status >= 400 && response.status != HTTP_BAD_REQUEST &&
                response.status != HTTP_NOT_FOUND &&
                response.status != HTTP_INTERNAL_SERVER_ERROR) {
@@ -460,7 +488,7 @@ static UniValue CallRPC(BaseRequestHandler *rh, const std::string &strMethod,
     return reply;
 }
 
-int CommandLineRPC(int argc, char *argv[]) {
+static int CommandLineRPC(int argc, char *argv[]) {
     std::string strPrint;
     int nRet = 0;
     try {

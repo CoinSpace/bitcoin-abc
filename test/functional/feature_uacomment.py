@@ -18,7 +18,6 @@ class UacommentTest(BitcoinTestFramework):
     def run_test(self):
         self.log.info("test multiple -uacomment")
         test_uacomment = self.nodes[0].getnetworkinfo()["subversion"]
-        subversion_len = len(test_uacomment)
         assert_equal(test_uacomment[-12:-2], "testnode-0")
 
         self.restart_node(0, ["-uacomment=foo"])
@@ -27,14 +26,14 @@ class UacommentTest(BitcoinTestFramework):
 
         self.log.info("test -uacomment max length")
         self.stop_node(0)
-        expected = "Error: Total length of network version string \([0-9]+\) exceeds maximum length \(256\). Reduce the number or size of uacomments."
+        expected = r"Error: Total length of network version string \([0-9]+\) exceeds maximum length \(256\). Reduce the number or size of uacomments."
         self.nodes[0].assert_start_raises_init_error(
             ["-uacomment=" + 'a' * 256], expected)
 
         self.log.info("test -uacomment unsafe characters")
         for unsafe_char in ['/', ':', '(', ')']:
-            expected = "Error: User Agent comment \(" + re.escape(
-                unsafe_char) + "\) contains unsafe characters."
+            expected = r"Error: User Agent comment \(" + re.escape(
+                unsafe_char) + r"\) contains unsafe characters."
             self.nodes[0].assert_start_raises_init_error(
                 ["-uacomment=" + unsafe_char], expected)
 

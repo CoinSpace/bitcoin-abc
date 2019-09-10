@@ -452,7 +452,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         mSigObj = self.nodes[2].addmultisigaddress(
             2, [addr1Obj['pubkey'], addr2Obj['pubkey']])['address']
 
-        # send 1.2 BTC to msig addr
+        # send 1.2 BCH to msig addr
         txId = self.nodes[0].sendtoaddress(mSigObj, 1.2)
         self.sync_all()
         self.nodes[1].generate(1)
@@ -759,8 +759,8 @@ class RawTransactionsTest(BitcoinTestFramework):
                       rawTx, {"feeRate": 2 * min_relay_tx_fee}),
                   self.nodes[3].fundrawtransaction(rawTx, {"feeRate": 2 * min_relay_tx_fee, "subtractFeeFromOutputs": [0]})]
 
-        dec_tx = [self.nodes[3].decoderawtransaction(tx['hex'])
-                  for tx in result]
+        dec_tx = [self.nodes[3].decoderawtransaction(tx_['hex'])
+                  for tx_ in result]
         output = [d['vout'][1 - r['changepos']]['value']
                   for d, r in zip(dec_tx, result)]
         change = [d['vout'][r['changepos']]['value']

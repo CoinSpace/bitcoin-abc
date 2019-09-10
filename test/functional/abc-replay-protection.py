@@ -43,9 +43,7 @@ from test_framework.util import assert_equal, assert_raises_rpc_error
 REPLAY_PROTECTION_START_TIME = 2000000000
 
 # Error due to invalid signature
-INVALID_SIGNATURE_ERROR = b'mandatory-script-verify-flag-failed (Signature must be zero for failed CHECK(MULTI)SIG operation)'
-RPC_INVALID_SIGNATURE_ERROR = "16: " + \
-    INVALID_SIGNATURE_ERROR.decode("utf-8")
+RPC_INVALID_SIGNATURE_ERROR = "mandatory-script-verify-flag-failed (Signature must be zero for failed CHECK(MULTI)SIG operation) (code 16)"
 
 
 class PreviousSpendableOutput(object):
@@ -300,7 +298,7 @@ class ReplayProtectionTest(ComparisonTestFramework):
         assert(replay_tx1_id in set(node.getrawmempool()))
 
         # They also can also be mined
-        b5 = block(5)
+        block(5)
         update_block(5, replay_txns)
         yield accepted()
 

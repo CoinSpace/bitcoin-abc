@@ -89,12 +89,12 @@ void CTxMemPool::UpdateForDescendants(txiter updateIt,
         setAllDescendants.insert(cit);
         stageEntries.erase(cit);
         const setEntries &setChildren = GetMemPoolChildren(cit);
-        for (const txiter childEntry : setChildren) {
+        for (txiter childEntry : setChildren) {
             cacheMap::iterator cacheIt = cachedDescendants.find(childEntry);
             if (cacheIt != cachedDescendants.end()) {
                 // We've already calculated this one, just add the entries for
                 // this set but don't traverse again.
-                for (const txiter cacheEntry : cacheIt->second) {
+                for (txiter cacheEntry : cacheIt->second) {
                     setAllDescendants.insert(cacheEntry);
                 }
             } else if (!setAllDescendants.count(childEntry)) {
@@ -394,7 +394,7 @@ CTxMemPool::CTxMemPool() : nTransactionsUpdated(0) {
 
 CTxMemPool::~CTxMemPool() {}
 
-bool CTxMemPool::isSpent(const COutPoint &outpoint) {
+bool CTxMemPool::isSpent(const COutPoint &outpoint) const {
     LOCK(cs);
     return mapNextTx.count(outpoint);
 }
@@ -684,7 +684,20 @@ void CTxMemPool::clear() {
     _clear();
 }
 
+static void CheckInputsAndUpdateCoins(const CTransaction &tx,
+                                      CCoinsViewCache &mempoolDuplicate,
+                                      const int64_t spendheight) {
+    CValidationState state;
+    Amount txfee = Amount::zero();
+    bool fCheckResult =
+        tx.IsCoinBase() || Consensus::CheckTxInputs(tx, state, mempoolDuplicate,
+                                                    spendheight, txfee);
+    assert(fCheckResult);
+    UpdateCoins(mempoolDuplicate, tx, 1000000);
+}
+
 void CTxMemPool::check(const CCoinsViewCache *pcoins) const {
+    LOCK(cs);
     if (nCheckFrequency == 0) {
         return;
     }
@@ -701,9 +714,8 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const {
     uint64_t innerUsage = 0;
 
     CCoinsViewCache mempoolDuplicate(const_cast<CCoinsViewCache *>(pcoins));
-    const int64_t nSpendHeight = GetSpendHeight(mempoolDuplicate);
+    const int64_t spendheight = GetSpendHeight(mempoolDuplicate);
 
-    LOCK(cs);
     std::list<const CTxMemPoolEntry *> waitingOnDependants;
     for (indexed_transaction_set::const_iterator it = mapTx.begin();
          it != mapTx.end(); it++) {
@@ -790,12 +802,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const {
         if (fDependsWait) {
             waitingOnDependants.push_back(&(*it));
         } else {
-            CValidationState state;
-            bool fCheckResult = tx.IsCoinBase() ||
-                                Consensus::CheckTxInputs(
-                                    tx, state, mempoolDuplicate, nSpendHeight);
-            assert(fCheckResult);
-            UpdateCoins(mempoolDuplicate, tx, 1000000);
+            CheckInputsAndUpdateCoins(tx, mempoolDuplicate, spendheight);
         }
     }
 
@@ -809,12 +816,8 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const {
             stepsSinceLastRemove++;
             assert(stepsSinceLastRemove < waitingOnDependants.size());
         } else {
-            bool fCheckResult =
-                entry->GetTx().IsCoinBase() ||
-                Consensus::CheckTxInputs(entry->GetTx(), state,
-                                         mempoolDuplicate, nSpendHeight);
-            assert(fCheckResult);
-            UpdateCoins(mempoolDuplicate, entry->GetTx(), 1000000);
+            CheckInputsAndUpdateCoins(entry->GetTx(), mempoolDuplicate,
+                                      spendheight);
             stepsSinceLastRemove = 0;
         }
     }
@@ -942,7 +945,7 @@ CFeeRate CTxMemPool::estimateFee() const {
     // may disagree with the rollingMinimumFeerate under certain scenarios
     // where the mempool  increases rapidly, or blocks are being mined which
     // do not contain propagated transactions.
-    return std::max(GetConfig().GetMinFeePerKB(), GetMinFee(maxMempoolSize));
+    return std::max(::minRelayTxFee, GetMinFee(maxMempoolSize));
 }
 
 void CTxMemPool::PrioritiseTransaction(const uint256 &hash,
@@ -975,6 +978,7 @@ void CTxMemPool::PrioritiseTransaction(const uint256 &hash,
                 mapTx.modify(descendantIt,
                              update_ancestor_state(0, nFeeDelta, 0, 0));
             }
+            ++nTransactionsUpdated;
         }
     }
     LogPrintf("PrioritiseTransaction: %s priority += %f, fee += %d\n",
@@ -1026,20 +1030,15 @@ bool CCoinsViewMemPool::GetCoin(const COutPoint &outpoint, Coin &coin) const {
         }
         return false;
     }
-
-    return base->GetCoin(outpoint, coin) && !coin.IsSpent();
-}
-
-bool CCoinsViewMemPool::HaveCoin(const COutPoint &outpoint) const {
-    return mempool.exists(outpoint) || base->HaveCoin(outpoint);
+    return base->GetCoin(outpoint, coin);
 }
 
 size_t CTxMemPool::DynamicMemoryUsage() const {
     LOCK(cs);
-    // Estimate the overhead of mapTx to be 15 pointers + an allocation, as no
+    // Estimate the overhead of mapTx to be 12 pointers + an allocation, as no
     // exact formula for boost::multi_index_contained is implemented.
     return memusage::MallocUsage(sizeof(CTxMemPoolEntry) +
-                                 15 * sizeof(void *)) *
+                                 12 * sizeof(void *)) *
                mapTx.size() +
            memusage::DynamicUsage(mapNextTx) +
            memusage::DynamicUsage(mapDeltas) +
@@ -1364,12 +1363,39 @@ void CTxMemPool::TrimToSize(size_t sizelimit,
     }
 }
 
-bool CTxMemPool::TransactionWithinChainLimit(const uint256 &txid,
-                                             size_t chainLimit) const {
+uint64_t CTxMemPool::CalculateDescendantMaximum(txiter entry) const {
+    // find parent with highest descendant count
+    std::vector<txiter> candidates;
+    setEntries counted;
+    candidates.push_back(entry);
+    uint64_t maximum = 0;
+    while (candidates.size()) {
+        txiter candidate = candidates.back();
+        candidates.pop_back();
+        if (!counted.insert(candidate).second) {
+            continue;
+        }
+        const setEntries &parents = GetMemPoolParents(candidate);
+        if (parents.size() == 0) {
+            maximum = std::max(maximum, candidate->GetCountWithDescendants());
+        } else {
+            for (txiter i : parents) {
+                candidates.push_back(i);
+            }
+        }
+    }
+    return maximum;
+}
+
+void CTxMemPool::GetTransactionAncestry(const uint256 &txid, size_t &ancestors,
+                                        size_t &descendants) const {
     LOCK(cs);
     auto it = mapTx.find(txid);
-    return it == mapTx.end() || (it->GetCountWithAncestors() < chainLimit &&
-                                 it->GetCountWithDescendants() < chainLimit);
+    ancestors = descendants = 0;
+    if (it != mapTx.end()) {
+        ancestors = it->GetCountWithAncestors();
+        descendants = CalculateDescendantMaximum(it);
+    }
 }
 
 SaltedTxidHasher::SaltedTxidHasher()

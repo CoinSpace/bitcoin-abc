@@ -7,6 +7,7 @@
 #include <chainparams.h>
 #include <clientversion.h>
 #include <config.h>
+#include <core_io.h>
 #include <net.h>
 #include <net_processing.h>
 #include <netbase.h>
@@ -109,7 +110,7 @@ static UniValue getpeerinfo(const Config &config,
             "    \"pingwait\": n,             (numeric) ping wait (if "
             "non-zero)\n"
             "    \"version\": v,              (numeric) The peer version, such "
-            "as 7001\n"
+            "as 70001\n"
             "    \"subver\": \"/Satoshi:0.8.5/\",  (string) The string "
             "version\n"
             "    \"inbound\": true|false,     (boolean) Inbound (true) or "
@@ -183,7 +184,8 @@ static UniValue getpeerinfo(const Config &config,
         if (stats.dPingTime > 0.0) {
             obj.pushKV("pingtime", stats.dPingTime);
         }
-        if (stats.dMinPing < std::numeric_limits<int64_t>::max() / 1e6) {
+        if (stats.dMinPing <
+            static_cast<double>(std::numeric_limits<int64_t>::max()) / 1e6) {
             obj.pushKV("minping", stats.dMinPing);
         }
         if (stats.dPingWait > 0.0) {
@@ -588,14 +590,14 @@ static UniValue getnetworkinfo(const Config &config,
                    int(g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL)));
     }
     obj.pushKV("networks", GetNetworksInfo());
-    obj.pushKV("relayfee",
-               ValueFromAmount(config.GetMinFeePerKB().GetFeePerK()));
+    obj.pushKV("relayfee", ValueFromAmount(::minRelayTxFee.GetFeePerK()));
     obj.pushKV("excessutxocharge",
                ValueFromAmount(config.GetExcessUTXOCharge()));
     UniValue localAddresses(UniValue::VARR);
     {
         LOCK(cs_mapLocalHost);
-        for (const std::pair<CNetAddr, LocalServiceInfo> &item : mapLocalHost) {
+        for (const std::pair<const CNetAddr, LocalServiceInfo> &item :
+             mapLocalHost) {
             UniValue rec(UniValue::VOBJ);
             rec.pushKV("address", item.first.ToString());
             rec.pushKV("port", item.second.nPort);

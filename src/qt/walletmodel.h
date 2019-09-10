@@ -31,7 +31,7 @@ class CPubKey;
 
 namespace interfaces {
 class Node;
-} // namespace interface
+} // namespace interfaces
 
 QT_BEGIN_NAMESPACE
 class QTimer;
@@ -217,6 +217,10 @@ public:
     QString getWalletName() const;
 
     bool isMultiwallet();
+
+    AddressTableModel *getAddressTableModel() const {
+        return addressTableModel;
+    }
 
 private:
     std::unique_ptr<interfaces::Wallet> m_wallet;

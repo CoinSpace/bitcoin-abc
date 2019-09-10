@@ -8,10 +8,16 @@ A node should never send anything other than VERSION/VERACK/REJECT until it's
 received a VERACK.
 
 This test connects to a node and sends it a few messages, trying to intice it
-into sending us something it shouldn't."""
+into sending us something it shouldn't.
+"""
 
 import time
 
+from test_framework.messages import (
+    msg_getaddr,
+    msg_ping,
+    msg_verack,
+)
 from test_framework.mininode import (
     mininode_lock,
     network_thread_join,

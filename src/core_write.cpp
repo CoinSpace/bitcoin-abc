@@ -4,7 +4,8 @@
 
 #include <core_io.h>
 
-#include <dstencode.h>
+#include <config.h>
+#include <key_io.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
 #include <script/sigencoding.h>
@@ -16,6 +17,15 @@
 #include <utilstrencodings.h>
 
 #include <univalue.h>
+
+UniValue ValueFromAmount(const Amount &amount) {
+    bool sign = amount < Amount::zero();
+    Amount n_abs(sign ? -amount : amount);
+    int64_t quotient = n_abs / COIN;
+    int64_t remainder = (n_abs % COIN) / SATOSHI;
+    return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "",
+                                              quotient, remainder));
+}
 
 std::string FormatScript(const CScript &script) {
     std::string ret;
@@ -179,7 +189,7 @@ void ScriptPubKeyToUniv(const CScript &scriptPubKey, UniValue &out,
 
     UniValue a(UniValue::VARR);
     for (const CTxDestination &addr : addresses) {
-        a.push_back(EncodeDestination(addr));
+        a.push_back(EncodeDestination(addr, GetConfig()));
     }
     out.pushKV("addresses", a);
 }
@@ -222,8 +232,7 @@ void TxToUniv(const CTransaction &tx, const uint256 &hashBlock, UniValue &entry,
 
         UniValue out(UniValue::VOBJ);
 
-        UniValue outValue(UniValue::VNUM, FormatMoney(txout.nValue));
-        out.pushKV("value", outValue);
+        out.pushKV("value", ValueFromAmount(txout.nValue));
         out.pushKV("n", int64_t(i));
 
         UniValue o(UniValue::VOBJ);

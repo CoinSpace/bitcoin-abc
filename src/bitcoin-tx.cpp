@@ -6,13 +6,12 @@
 #include <config/bitcoin-config.h>
 #endif
 
-#include <base58.h>
 #include <chainparams.h>
 #include <clientversion.h>
 #include <coins.h>
 #include <consensus/consensus.h>
 #include <core_io.h>
-#include <dstencode.h>
+#include <key_io.h>
 #include <keystore.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
@@ -91,6 +90,10 @@ static void SetupBitcoinTxArgs() {
     gArgs.AddArg("set=NAME:JSON-STRING",
                  _("Set register NAME to given JSON-STRING"), false,
                  OptionsCategory::REGISTER_COMMANDS);
+
+    // Hidden
+    gArgs.AddArg("-h", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-help", "", false, OptionsCategory::HIDDEN);
 }
 
 //
@@ -102,7 +105,12 @@ static int AppInitRawTx(int argc, char *argv[]) {
     // Parameters
     //
     SetupBitcoinTxArgs();
-    gArgs.ParseParameters(argc, argv);
+    std::string error;
+    if (!gArgs.ParseParameters(argc, argv, error)) {
+        fprintf(stderr, "Error parsing command line arguments: %s\n",
+                error.c_str());
+        return EXIT_FAILURE;
+    }
 
     // Check for -testnet or -regtest parameter (Params() calls are only valid
     // after this clause)
@@ -553,13 +561,11 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
         throw std::runtime_error("unknown sighash flag/sign option");
     }
 
-    std::vector<CTransaction> txVariants;
-    txVariants.push_back(CTransaction(tx));
+    // mergedTx will end up with all the signatures; it
+    // starts as a clone of the raw tx:
+    CMutableTransaction mergedTx{tx};
+    const CMutableTransaction txv{tx};
 
-    // mergedTx will end up with all the signatures; it starts as a clone of the
-    // raw tx:
-    CMutableTransaction mergedTx(txVariants[0]);
-    bool fComplete = true;
     CCoinsView viewDummy;
     CCoinsViewCache view(&viewDummy);
 
@@ -575,13 +581,10 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
             throw std::runtime_error("privatekey not a std::string");
         }
 
-        CBitcoinSecret vchSecret;
-        bool fGood = vchSecret.SetString(keysObj[kidx].getValStr());
-        if (!fGood) {
+        CKey key = DecodeSecret(keysObj[kidx].getValStr());
+        if (!key.IsValid()) {
             throw std::runtime_error("privatekey not valid");
         }
-
-        CKey key = vchSecret.GetKey();
         tempKeystore.AddKey(key);
     }
 
@@ -653,10 +656,9 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
 
     // Sign what we can:
     for (size_t i = 0; i < mergedTx.vin.size(); i++) {
-        CTxIn &txin = mergedTx.vin[i];
+        const CTxIn &txin = mergedTx.vin[i];
         const Coin &coin = view.AccessCoin(txin.prevout);
         if (coin.IsSpent()) {
-            fComplete = false;
             continue;
         }
 
@@ -673,25 +675,11 @@ static void MutateTxSign(CMutableTransaction &tx, const std::string &flagStr) {
         }
 
         // ... and merge in other signatures:
-        for (const CTransaction &txv : txVariants) {
-            sigdata = CombineSignatures(
-                prevPubKey,
-                MutableTransactionSignatureChecker(&mergedTx, i, amount),
-                sigdata, DataFromTransaction(txv, i));
-        }
-
+        sigdata = CombineSignatures(
+            prevPubKey,
+            MutableTransactionSignatureChecker(&mergedTx, i, amount), sigdata,
+            DataFromTransaction(txv, i));
         UpdateTransaction(mergedTx, i, sigdata);
-
-        if (!VerifyScript(
-                txin.scriptSig, prevPubKey, STANDARD_SCRIPT_VERIFY_FLAGS,
-                MutableTransactionSignatureChecker(&mergedTx, i, amount))) {
-            fComplete = false;
-        }
-    }
-
-    if (fComplete) {
-        // do nothing... for now
-        // perhaps store this for later optional JSON output
     }
 
     tx = mergedTx;

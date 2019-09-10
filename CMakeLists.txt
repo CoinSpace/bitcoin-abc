@@ -25,9 +25,10 @@ if(NOT CMAKE_BUILD_TYPE)
 		"Select the configuration for the build" FORCE)
 endif()
 
-# Add the magic taret check and check-all
+# Add the magic targets `check` and `check-all`
 add_custom_target(check-all)
 add_custom_target(check)
 
 add_subdirectory(src)
 add_subdirectory(test)
+add_subdirectory(doc)

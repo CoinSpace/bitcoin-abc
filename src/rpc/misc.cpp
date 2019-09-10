@@ -8,8 +8,9 @@
 #include <chain.h>
 #include <clientversion.h>
 #include <config.h>
-#include <dstencode.h>
+#include <core_io.h>
 #include <init.h>
+#include <key_io.h>
 #include <net.h>
 #include <netbase.h>
 #include <rpc/blockchain.h>
@@ -271,13 +272,12 @@ static UniValue validateaddress(const Config &config,
 
     if (isValid) {
 #ifdef ENABLE_WALLET
-        if (!::vpwallets.empty() &&
-            IsDeprecatedRPCEnabled(gArgs, "validateaddress")) {
+        if (HasWallets() && IsDeprecatedRPCEnabled(gArgs, "validateaddress")) {
             ret.pushKVs(getaddressinfo(config, request));
         }
 #endif
         if (ret["address"].isNull()) {
-            std::string currentAddress = EncodeDestination(dest);
+            std::string currentAddress = EncodeDestination(dest, config);
             ret.pushKV("address", currentAddress);
 
             CScript scriptPubKey = GetScriptForDestination(dest);
@@ -384,7 +384,7 @@ static UniValue createmultisig(const Config &config,
     CScriptID innerID(inner);
 
     UniValue result(UniValue::VOBJ);
-    result.pushKV("address", EncodeDestination(innerID));
+    result.pushKV("address", EncodeDestination(innerID, config));
     result.pushKV("redeemScript", HexStr(inner.begin(), inner.end()));
 
     return result;
@@ -962,15 +962,9 @@ static UniValue signmessagewithprivkey(const Config &config,
     std::string strPrivkey = request.params[0].get_str();
     std::string strMessage = request.params[1].get_str();
 
-    CBitcoinSecret vchSecret;
-    bool fGood = vchSecret.SetString(strPrivkey);
-    if (!fGood) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-    }
-    CKey key = vchSecret.GetKey();
+    CKey key = DecodeSecret(strPrivkey);
     if (!key.IsValid()) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
-                           "Private key outside allowed range");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
     }
 
     CHashWriter ss(SER_GETHASH, 0);
@@ -982,7 +976,7 @@ static UniValue signmessagewithprivkey(const Config &config,
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
     }
 
-    return EncodeBase64(&vchSig[0], vchSig.size());
+    return EncodeBase64(vchSig.data(), vchSig.size());
 }
 
 static UniValue setmocktime(const Config &config,

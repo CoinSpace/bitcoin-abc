@@ -64,15 +64,24 @@ static void SetupBenchArgs() {
         "-plot-height=<x>",
         strprintf(_("Plot height in pixel (default: %u)"), DEFAULT_PLOT_HEIGHT),
         false, OptionsCategory::OPTIONS);
+
+    // Hidden
+    gArgs.AddArg("-h", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-help", "", false, OptionsCategory::HIDDEN);
 }
 
 int main(int argc, char **argv) {
     SetupBenchArgs();
-    gArgs.ParseParameters(argc, argv);
+    std::string error;
+    if (!gArgs.ParseParameters(argc, argv, error)) {
+        fprintf(stderr, "Error parsing command line arguments: %s\n",
+                error.c_str());
+        return EXIT_FAILURE;
+    }
 
     if (HelpRequested(gArgs)) {
         std::cout << gArgs.GetHelpMessage();
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     SHA256AutoDetect();
@@ -104,4 +113,6 @@ int main(int argc, char **argv) {
                                    regex_filter, is_list_only);
 
     ECC_Stop();
+
+    return EXIT_SUCCESS;
 }

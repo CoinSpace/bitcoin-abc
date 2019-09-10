@@ -2,7 +2,7 @@
 # Copyright (c) 2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#
+"""Test processing of feefilter messages."""
 
 from decimal import Decimal
 import time
@@ -15,10 +15,6 @@ from test_framework.mininode import (
 )
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import sync_blocks, sync_mempools
-
-'''
-FeeFilterTest -- test processing of feefilter messages
-'''
 
 
 def hashToHex(hash):
@@ -36,7 +32,7 @@ def allInvsMatch(invsExpected, testnode):
     return False
 
 
-class TestNode(P2PInterface):
+class TestP2PConn(P2PInterface):
     def __init__(self):
         super().__init__()
         self.txinvs = []
@@ -63,7 +59,7 @@ class FeeFilterTest(BitcoinTestFramework):
         sync_blocks(self.nodes)
 
         # Setup the p2p connections and start up the network thread.
-        self.nodes[0].add_p2p_connection(TestNode())
+        self.nodes[0].add_p2p_connection(TestP2PConn())
         network_thread_start()
         self.nodes[0].p2p.wait_for_verack()
 

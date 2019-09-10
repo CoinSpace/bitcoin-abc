@@ -2,15 +2,16 @@
 # Copyright (c) 2014-2017 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
-"""rawtranscation RPCs QA test.
+"""Test the rawtranscation RPCs.
 
-# Tests the following RPCs:
-#    - createrawtransaction
-#    - signrawtransactionwithwallet
-#    - sendrawtransaction
-#    - decoderawtransaction
-#    - getrawtransaction
+Test the following RPCs:
+   - createrawtransaction
+   - signrawtransactionwithwallet
+   - sendrawtransaction
+   - decoderawtransaction
+   - getrawtransaction
 """
+
 from decimal import Decimal
 
 from collections import OrderedDict
@@ -255,7 +256,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         # use balance deltas instead of absolute values
         bal = self.nodes[2].getbalance()
 
-        # send 1.2 BTC to msig adr
+        # send 1.2 BCH to msig adr
         txId = self.nodes[0].sendtoaddress(mSigObj, 1.2)
         self.sync_all()
         self.nodes[0].generate(1)
@@ -284,7 +285,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         self.nodes[0].generate(1)
         self.sync_all()
 
-        # THIS IS A INCOMPLETE FEATURE
+        # THIS IS AN INCOMPLETE FEATURE
         # NODE2 HAS TWO OF THREE KEY AND THE FUNDS SHOULD BE SPENDABLE AND
         # COUNT AT BALANCE CALCULATION
         # for now, assume the funds of a 2of3 multisig tx are not marked as
@@ -367,7 +368,7 @@ class RawTransactionsTest(BitcoinTestFramework):
             rawTx2, inputs)
         self.log.debug(rawTxPartialSigned1)
         # node1 only has one key, can't comp. sign the tx
-        assert_equal(rawTxPartialSigned['complete'], False)
+        assert_equal(rawTxPartialSigned1['complete'], False)
 
         rawTxPartialSigned2 = self.nodes[2].signrawtransactionwithwallet(
             rawTx2, inputs)

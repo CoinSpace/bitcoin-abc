@@ -108,9 +108,8 @@ public:
     virtual bool delAddressBook(const CTxDestination &dest) = 0;
 
     //! Look up address in wallet, return whether exists.
-    virtual bool getAddress(const CTxDestination &dest,
-                            std::string *name = nullptr,
-                            isminetype *is_mine = nullptr) = 0;
+    virtual bool getAddress(const CTxDestination &dest, std::string *name,
+                            isminetype *is_mine, std::string *purpose) = 0;
 
     //! Get wallet address list.
     virtual std::vector<WalletAddress> getAddresses() = 0;
@@ -168,14 +167,13 @@ public:
     //! Try to get updated status for a particular transaction, if possible
     //! without blocking.
     virtual bool tryGetTxStatus(const TxId &txid, WalletTxStatus &tx_status,
-                                int &num_blocks, int64_t &adjusted_time) = 0;
+                                int &num_blocks, int64_t &block_time) = 0;
 
     //! Get transaction details.
     virtual WalletTx getWalletTxDetails(const TxId &txid,
                                         WalletTxStatus &tx_status,
                                         WalletOrderForm &order_form,
-                                        bool &in_mempool, int &num_blocks,
-                                        int64_t &adjusted_time) = 0;
+                                        bool &in_mempool, int &num_blocks) = 0;
 
     //! Get balances.
     virtual WalletBalances getBalances() = 0;
@@ -211,8 +209,21 @@ public:
     virtual std::vector<WalletTxOut>
     getCoins(const std::vector<COutPoint> &outputs) = 0;
 
+    //! Get required fee.
+    virtual Amount getRequiredFee(unsigned int tx_bytes) = 0;
+
+    //! Get minimum fee.
+    virtual Amount getMinimumFee(unsigned int tx_bytes,
+                                 const CCoinControl &coin_control) = 0;
+
     // Return whether HD enabled.
     virtual bool hdEnabled() = 0;
+
+    // Get default address type.
+    virtual OutputType getDefaultAddressType() = 0;
+
+    // Get default change type.
+    virtual OutputType getDefaultChangeType() = 0;
 
     //! Register handler for show progress messages.
     using ShowProgressFn =
@@ -312,7 +323,6 @@ struct WalletTxStatus {
     int block_height;
     int blocks_to_maturity;
     int depth_in_main_chain;
-    int request_count;
     unsigned int time_received;
     uint32_t lock_time;
     bool is_final;

@@ -83,6 +83,9 @@ public:
     CMainParams() {
         strNetworkID = "main";
         consensus.nSubsidyHalvingInterval = 210000;
+        // 00000000000000ce80a7e057163a4db1d5ad7b20fb6f598c9597b9665c8fb0d4 -
+        // April 1, 2012
+        consensus.BIP16Height = 173805;
         consensus.BIP34Height = 227931;
         consensus.BIP34Hash = uint256S(
             "000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8");
@@ -102,12 +105,12 @@ public:
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S(
-            "000000000000000000000000000000000000000000eff3c3a458ba78bf184946");
+            "000000000000000000000000000000000000000000f82892fe397d90089a49a5");
 
         // By default assume that the signatures in ancestors of this block are
         // valid.
         consensus.defaultAssumeValid = uint256S(
-            "0000000000000000023b7cce03f549ba13097b7f9dba787e8b7e7e9f231e0463");
+            "0000000000000000025e589b280d1d947cded3c29a7881ad9bdea722269452be");
 
         // August 1, 2017 hard fork
         consensus.uahfHeight = 478558;
@@ -117,9 +120,6 @@ public:
 
         // November 15, 2018 hard fork
         consensus.magneticAnomalyHeight = 556766;
-
-        // Wed, 15 May 2019 12:00:00 UTC hard fork
-        consensus.greatWallActivationTime = 1557921600;
 
         // Nov 15, 2019 12:00:00 UTC protocol upgrade
         consensus.gravitonActivationTime = 1573819200;
@@ -165,8 +165,6 @@ public:
         vSeeds.emplace_back("seed.bitprim.org");
         // Amaury SÉCHET
         vSeeds.emplace_back("seed.deadalnix.me");
-        // criptolayer.net
-        vSeeds.emplace_back("seeder.criptolayer.net");
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<uint8_t>(1, 0);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<uint8_t>(1, 5);
@@ -249,6 +247,8 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         consensus.nSubsidyHalvingInterval = 210000;
+        // 00000000040b4e986385315e14bee30ad876d8b47f748025b26683116d21aa65
+        consensus.BIP16Height = 514;
         consensus.BIP34Height = 21111;
         consensus.BIP34Hash = uint256S(
             "0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8");
@@ -268,12 +268,12 @@ public:
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S(
-            "00000000000000000000000000000000000000000000004ec11c53d25a577f28");
+            "0000000000000000000000000000000000000000000000512031dc9900995ec4");
 
         // By default assume that the signatures in ancestors of this block are
         // valid.
         consensus.defaultAssumeValid = uint256S(
-            "000000000000001b564c7e20d8f002203a6b7029f440edece8c7b2e549b8202f");
+            "00000000fbabb53ec6eddb3d56d3262f30dbb6549b391255090d351eccd01c24");
 
         // August 1, 2017 hard fork
         consensus.uahfHeight = 1155875;
@@ -283,9 +283,6 @@ public:
 
         // November 15, 2018 hard fork
         consensus.magneticAnomalyHeight = 1267996;
-
-        // Wed, 15 May 2019 12:00:00 UTC hard fork
-        consensus.greatWallActivationTime = 1557921600;
 
         // Nov 15, 2019 12:00:00 UTC protocol upgrade
         consensus.gravitonActivationTime = 1573819200;
@@ -322,8 +319,6 @@ public:
         vSeeds.emplace_back("testnet-seed.bitprim.org");
         // Amaury SÉCHET
         vSeeds.emplace_back("testnet-seed.deadalnix.me");
-        // criptolayer.net
-        vSeeds.emplace_back("testnet-seeder.criptolayer.net");
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<uint8_t>(1, 111);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<uint8_t>(1, 196);
@@ -368,6 +363,8 @@ public:
     CRegTestParams() {
         strNetworkID = "regtest";
         consensus.nSubsidyHalvingInterval = 150;
+        // always enforce P2SH BIP16 on regtest
+        consensus.BIP16Height = 0;
         // BIP34 has not activated on regtest (far in the future so block v1 are
         // not rejected in tests)
         consensus.BIP34Height = 100000000;
@@ -401,9 +398,6 @@ public:
 
         // November 15, 2018 hard fork is always on on regtest.
         consensus.magneticAnomalyHeight = 0;
-
-        // Wed, 15 May 2019 12:00:00 UTC hard fork
-        consensus.greatWallActivationTime = 1557921600;
 
         // Nov 15, 2019 12:00:00 UTC protocol upgrade
         consensus.gravitonActivationTime = 1573819200;

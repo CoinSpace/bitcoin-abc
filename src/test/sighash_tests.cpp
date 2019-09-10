@@ -98,24 +98,25 @@ static void RandomScript(CScript &script) {
 }
 
 static void RandomTransaction(CMutableTransaction &tx, bool fSingle) {
-    tx.nVersion = insecure_rand();
+    tx.nVersion = InsecureRand32();
     tx.vin.clear();
     tx.vout.clear();
-    tx.nLockTime = (InsecureRandBool()) ? insecure_rand() : 0;
+    tx.nLockTime = (InsecureRandBool()) ? InsecureRand32() : 0;
     int ins = (InsecureRandBits(2)) + 1;
     int outs = fSingle ? ins : (InsecureRandBits(2)) + 1;
     for (int in = 0; in < ins; in++) {
         tx.vin.push_back(CTxIn());
         CTxIn &txin = tx.vin.back();
-        txin.prevout = COutPoint(InsecureRand256(), InsecureRandBits(2));
+        txin.prevout = COutPoint(TxId(InsecureRand256()), InsecureRandBits(2));
         RandomScript(txin.scriptSig);
-        txin.nSequence =
-            (InsecureRandBool()) ? insecure_rand() : (unsigned int)-1;
+        txin.nSequence = InsecureRandBool()
+                             ? InsecureRand32()
+                             : std::numeric_limits<uint32_t>::max();
     }
     for (int out = 0; out < outs; out++) {
         tx.vout.push_back(CTxOut());
         CTxOut &txout = tx.vout.back();
-        txout.nValue = (int64_t(insecure_rand()) % 100000000) * SATOSHI;
+        txout.nValue = int64_t(InsecureRandRange(100000000)) * SATOSHI;
         RandomScript(txout.scriptPubKey);
     }
 }
@@ -134,7 +135,7 @@ BOOST_AUTO_TEST_CASE(sighash_test) {
 
     int nRandomTests = 1000;
     for (int i = 0; i < nRandomTests; i++) {
-        uint32_t nHashType = insecure_rand();
+        uint32_t nHashType = InsecureRand32();
         SigHashType sigHashType(nHashType);
 
         CMutableTransaction txTo;

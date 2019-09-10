@@ -289,7 +289,7 @@ bool BlockAssembler::TestPackage(uint64_t packageSize,
 bool BlockAssembler::TestPackageTransactions(
     const CTxMemPool::setEntries &package) {
     uint64_t nPotentialBlockSize = nBlockSize;
-    for (const CTxMemPool::txiter it : package) {
+    for (CTxMemPool::txiter it : package) {
         CValidationState state;
         if (!ContextualCheckTransaction(*config, it->GetTx(), state, nHeight,
                                         nLockTimeCutoff, nMedianTimePast)) {
@@ -378,7 +378,7 @@ int BlockAssembler::UpdatePackagesForAdded(
     const CTxMemPool::setEntries &alreadyAdded,
     indexed_modified_transaction_set &mapModifiedTx) {
     int nDescendantsUpdated = 0;
-    for (const CTxMemPool::txiter it : alreadyAdded) {
+    for (CTxMemPool::txiter it : alreadyAdded) {
         CTxMemPool::setEntries descendants;
         mempool->CalculateDescendants(it, descendants);
         // Insert all descendants (not yet in block) into the modified set.
@@ -420,7 +420,7 @@ bool BlockAssembler::SkipMapTxEntry(
 }
 
 void BlockAssembler::SortForBlock(
-    const CTxMemPool::setEntries &package, CTxMemPool::txiter entry,
+    const CTxMemPool::setEntries &package,
     std::vector<CTxMemPool::txiter> &sortedEntries) {
     // Sort package by ancestor count. If a transaction A depends on transaction
     // B, then A's ancestor count must be greater than B's. So this is
@@ -495,7 +495,8 @@ void BlockAssembler::addPackageTxs(int &nPackagesSelected,
             // Try to compare the mapTx entry to the mapModifiedTx entry.
             iter = mempool->mapTx.project<0>(mi);
             if (modit != mapModifiedTx.get<ancestor_score>().end() &&
-                CompareModifiedEntry()(*modit, CTxMemPoolModifiedEntry(iter))) {
+                CompareTxMemPoolEntryByAncestorFee()(
+                    *modit, CTxMemPoolModifiedEntry(iter))) {
                 // The best entry in mapModifiedTx has higher score than the one
                 // from mapTx. Switch which transaction (package) to consider
                 iter = modit->iter;
@@ -569,7 +570,7 @@ void BlockAssembler::addPackageTxs(int &nPackagesSelected,
 
         // Package can be added. Sort the entries in a valid order.
         std::vector<CTxMemPool::txiter> sortedEntries;
-        SortForBlock(ancestors, iter, sortedEntries);
+        SortForBlock(ancestors, sortedEntries);
 
         for (auto &entry : sortedEntries) {
             AddToBlock(entry);

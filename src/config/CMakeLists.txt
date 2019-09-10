@@ -8,13 +8,13 @@ include(CheckSymbolExists)
 include(CheckCXXSourceCompiles)
 
 # Package information
-set(PACKAGE_NAME "Bitcoin ABC")
+set(PACKAGE_NAME "Bitcoin ABC" CACHE STRING "Package name")
 
 # Version
-set(CLIENT_VERSION_MAJOR 0)
-set(CLIENT_VERSION_MINOR 19)
-set(CLIENT_VERSION_REVISION 8)
-set(CLIENT_VERSION_BUILD 0)
+set(CLIENT_VERSION_MAJOR 0 CACHE STRING "Major version number")
+set(CLIENT_VERSION_MINOR 19 CACHE STRING "Minor version number")
+set(CLIENT_VERSION_REVISION 12 CACHE STRING "Revision version number")
+set(CLIENT_VERSION_BUILD 0 CACHE STRING "Build version number")
 
 option(CLIENT_VERSION_IS_RELEASE "Build a release version" OFF)
 
@@ -127,6 +127,10 @@ check_symbol_exists(daemon "unistd.h" HAVE_DECL_DAEMON)
 check_symbol_exists(getentropy "unistd.h" HAVE_GETENTROPY)
 check_symbol_exists(getentropy "sys/random.h" HAVE_GETENTROPY_RAND)
 
+# getifaddrs and freeifaddrs may be unavailable with some Android versions
+check_symbol_exists(getifaddrs "sys/types.h;ifaddrs.h" HAVE_DECL_GETIFADDRS)
+check_symbol_exists(freeifaddrs "sys/types.h;ifaddrs.h" HAVE_DECL_FREEIFADDRS)
+
 check_cxx_source_compiles("
 	#include <unistd.h>  /* for syscall */
 	#include <sys/syscall.h>  /* for SYS_getrandom */
@@ -145,6 +149,15 @@ check_cxx_source_compiles("
 		return 0;
 	}
 " HAVE_SYSCTL_ARND)
+
+check_cxx_source_compiles("
+    #include <cstdint>
+    #include <type_traits>
+    int main() {
+        static_assert(std::is_same<int8_t, char>::value, \"\");
+        return 0;
+    }
+" CHAR_EQUALS_INT8)
 
 # OpenSSL functionality
 set(CMAKE_REQUIRED_INCLUDES ${OPENSSL_CRYPTO_INCLUDES})

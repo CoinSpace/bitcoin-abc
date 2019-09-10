@@ -35,7 +35,8 @@ class QUrl;
 class QWidget;
 QT_END_NAMESPACE
 
-/** Utility functions used by the Bitcoin Qt UI.
+/**
+ * Utility functions used by the Bitcoin Qt UI.
  */
 namespace GUIUtil {
 
@@ -47,25 +48,22 @@ QString dateTimeStr(qint64 nTime);
 QFont fixedPitchFont();
 
 // Generate an invalid, but convincing address.
-std::string DummyAddress(const Config &config);
+std::string DummyAddress(const CChainParams &params);
 
-// Convert an address into the user chosen format
-QString convertToConfiguredAddressFormat(const Config &config,
-                                         const QString &addr);
+// Convert any address into cashaddr
+QString convertToCashAddr(const CChainParams &params, const QString &addr);
 
 // Set up widgets for address and amounts
 void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent);
 void setupAmountWidget(QLineEdit *widget, QWidget *parent);
 
-QString bitcoinURIScheme(const CChainParams &, bool useCashAddr);
-QString bitcoinURIScheme(const Config &);
 // Parse "bitcoincash:" URI into recipient object, return true on successful
 // parsing
 bool parseBitcoinURI(const QString &scheme, const QUrl &uri,
                      SendCoinsRecipient *out);
 bool parseBitcoinURI(const QString &scheme, QString uri,
                      SendCoinsRecipient *out);
-QString formatBitcoinURI(const Config &config, const SendCoinsRecipient &info);
+QString formatBitcoinURI(const SendCoinsRecipient &info);
 
 // Returns true if given address+amount meets "dust" definition
 bool isDust(interfaces::Node &node, const QString &address, const Amount amount,

@@ -23,22 +23,37 @@ THREADS=$(nproc || sysctl -n hw.ncpu)
 
 # Default to nothing
 : ${DISABLE_WALLET:=}
+: ${CONFIGURE_FLAGS:=}
 
-CONFIGURE_FLAGS=("--prefix=`pwd`")
+CONFIGURE_FLAGS=($CONFIGURE_FLAGS "--prefix=`pwd`")
 if [[ ! -z "${DISABLE_WALLET}" ]]; then
 	echo "*** Building without wallet"
 	CONFIGURE_FLAGS+=("--disable-wallet")
 fi
 
-# Default to nothing
-: ${ENABLE_DEBUG:=}
-
-if [[ ! -z "${ENABLE_DEBUG}" ]]; then
-	echo "*** Building with debug"
-	CONFIGURE_FLAGS+=("--enable-debug")
-fi
-
 ../configure "${CONFIGURE_FLAGS[@]}"
+
+# Base directories for sanitizer related files 
+SAN_SUPP_DIR="${TOPLEVEL}/test/sanitizer_suppressions"
+SAN_LOG_DIR="${BUILD_DIR}/sanitizer_logs"
+
+# Create the log directory if it doesn't exist and clear it
+mkdir -p "${SAN_LOG_DIR}"
+rm -rf "${SAN_LOG_DIR}"/*
+
+# Sanitizers options, not used if sanitizers are not enabled
+export ASAN_OPTIONS="malloc_context_size=0:log_path=${SAN_LOG_DIR}/asan.log"
+export LSAN_OPTIONS="suppressions=${SAN_SUPP_DIR}/lsan:log_path=${SAN_LOG_DIR}/lsan.log"
+export TSAN_OPTIONS="suppressions=${SAN_SUPP_DIR}/tsan:log_path=${SAN_LOG_DIR}/tsan.log"
+export UBSAN_OPTIONS="suppressions=${SAN_SUPP_DIR}/ubsan:print_stacktrace=1:halt_on_error=1:log_path=${SAN_LOG_DIR}/ubsan.log"
+
+function print_sanitizers_log() {
+	for log in "${SAN_LOG_DIR}"/*.log.*
+	do
+		echo "*** Output of ${log} ***"
+		cat "${log}"
+	done
+}
 
 # Run build
 make -j ${THREADS}
@@ -51,23 +66,21 @@ if [[ -z "${DISABLE_TESTS}" ]]; then
 	echo "*** Running tests"
 
 	# Run unit tests
-	make -j ${THREADS} check
+	make -j ${THREADS} check || (print_sanitizers_log && exit 1)
 
-	# FIXME Remove when the functional tests are running with debug enabled
-	if [[ -z "${ENABLE_DEBUG}" ]]; then
-		mkdir -p output/
-		BRANCH=$(git rev-parse --abbrev-ref HEAD)
-		if [[ ! -z "${DISABLE_WALLET}" ]]; then
-			echo "Skipping rpc testing due to disabled wallet functionality."
-		elif [[ "${BRANCH}" == "master" ]]; then
-			./test/functional/test_runner.py --cutoff=600 --tmpdirprefix=output
-			./test/functional/test_runner.py --cutoff=600 --tmpdirprefix=output --with-gravitonactivation
-		else
-			./test/functional/test_runner.py --tmpdirprefix=output
-			./test/functional/test_runner.py --tmpdirprefix=output --with-gravitonactivation
-		fi
+	mkdir -p output/
+	BRANCH=$(git rev-parse --abbrev-ref HEAD)
+	JUNIT_DEFAULT="junit_results_default.xml"
+	JUNIT_NEXT_UPGRADE="junit_results_next_upgrade.xml"
+
+	if [[ ! -z "${DISABLE_WALLET}" ]]; then
+		echo "Skipping rpc testing due to disabled wallet functionality."
+	elif [[ "${BRANCH}" == "master" ]]; then
+		./test/functional/test_runner.py -J="${JUNIT_DEFAULT}" --cutoff=600 --tmpdirprefix=output
+		./test/functional/test_runner.py -J="${JUNIT_NEXT_UPGRADE}" --cutoff=600 --tmpdirprefix=output --with-gravitonactivation
 	else
-		echo "*** Functional tests have been skipped"
+		./test/functional/test_runner.py -J="${JUNIT_DEFAULT}" --tmpdirprefix=output
+		./test/functional/test_runner.py -J="${JUNIT_NEXT_UPGRADE}" --tmpdirprefix=output --with-gravitonactivation
 	fi
 else
 	echo "*** Tests have been skipped"

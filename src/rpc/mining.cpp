@@ -12,8 +12,8 @@
 #include <consensus/params.h>
 #include <consensus/validation.h>
 #include <core_io.h>
-#include <dstencode.h>
 #include <init.h>
+#include <key_io.h>
 #include <miner.h>
 #include <net.h>
 #include <policy/policy.h>
@@ -317,12 +317,12 @@ static UniValue BIP22ValidationResult(const Config &config,
         return NullUniValue;
     }
 
-    std::string strRejectReason = state.GetRejectReason();
     if (state.IsError()) {
-        throw JSONRPCError(RPC_VERIFY_ERROR, strRejectReason);
+        throw JSONRPCError(RPC_VERIFY_ERROR, FormatStateMessage(state));
     }
 
     if (state.IsInvalid()) {
+        std::string strRejectReason = state.GetRejectReason();
         if (strRejectReason.empty()) {
             return "rejected";
         }
@@ -393,7 +393,7 @@ static UniValue getblocktemplate(const Config &config,
             "             ,...\n"
             "         ],\n"
             "         \"fee\": n,                    (numeric) difference in "
-            "value between transaction inputs and outputs (in Satoshis); for "
+            "value between transaction inputs and outputs (in satoshis); for "
             "coinbase transactions, this is a negative Number of the total "
             "collected block fees (ie, not including the block subsidy); if "
             "key is not present, fee is unknown and clients MUST NOT assume "
@@ -414,7 +414,7 @@ static UniValue getblocktemplate(const Config &config,
             "  },\n"
             "  \"coinbasevalue\" : n,              (numeric) maximum allowable "
             "input to coinbase transaction, including the generation award and "
-            "transaction fees (in Satoshis)\n"
+            "transaction fees (in satoshis)\n"
             "  \"coinbasetxn\" : { ... },          (json object) information "
             "for coinbase transaction\n"
             "  \"target\" : \"xxxx\",                (string) The hash target\n"
@@ -601,6 +601,7 @@ static UniValue getblocktemplate(const Config &config,
         pindexPrev = pindexPrevNew;
     }
 
+    assert(pindexPrev);
     // pointer for convenience
     CBlock *pblock = &pblocktemplate->block;
 
@@ -694,23 +695,19 @@ protected:
 
 static UniValue submitblock(const Config &config,
                             const JSONRPCRequest &request) {
+    // We allow 2 arguments for compliance with BIP22. Argument 2 is ignored.
     if (request.fHelp || request.params.size() < 1 ||
         request.params.size() > 2) {
         throw std::runtime_error(
-            "submitblock \"hexdata\" ( \"jsonparametersobject\" )\n"
+            "submitblock \"hexdata\"  ( \"dummy\" )\n"
             "\nAttempts to submit new block to network.\n"
-            "The 'jsonparametersobject' parameter is currently ignored.\n"
             "See https://en.bitcoin.it/wiki/BIP_0022 for full specification.\n"
 
             "\nArguments\n"
             "1. \"hexdata\"        (string, required) the hex-encoded block "
             "data to submit\n"
-            "2. \"parameters\"     (string, optional) object of optional "
-            "parameters\n"
-            "    {\n"
-            "      \"workid\" : \"id\"    (string, optional) if the server "
-            "provided a workid, it MUST be included with submissions\n"
-            "    }\n"
+            "2. \"dummy\"          (optional) dummy value, for compatibility "
+            "with BIP22. This value is ignored.\n"
             "\nResult:\n"
             "\nExamples:\n" +
             HelpExampleCli("submitblock", "\"mydata\"") +
@@ -799,7 +796,7 @@ static const ContextFreeRPCCommand commands[] = {
     {"mining",     "getmininginfo",         getmininginfo,         {}},
     {"mining",     "prioritisetransaction", prioritisetransaction, {"txid", "priority_delta", "fee_delta"}},
     {"mining",     "getblocktemplate",      getblocktemplate,      {"template_request"}},
-    {"mining",     "submitblock",           submitblock,           {"hexdata", "parameters"}},
+    {"mining",     "submitblock",           submitblock,           {"hexdata", "dummy"}},
 
     {"generating", "generatetoaddress",     generatetoaddress,     {"nblocks", "address", "maxtries"}},
 

@@ -26,7 +26,7 @@ private:
 
 public:
     COutPoint() : txid(), n(-1) {}
-    COutPoint(uint256 txidIn, uint32_t nIn) : txid(TxId(txidIn)), n(nIn) {}
+    COutPoint(TxId txidIn, uint32_t nIn) : txid(txidIn), n(nIn) {}
 
     ADD_SERIALIZE_METHODS;
 
@@ -222,9 +222,9 @@ public:
     // actually immutable; deserialization and assignment are implemented,
     // and bypass the constness. This is safe, as they update the entire
     // structure, including the hash.
-    const int32_t nVersion;
     const std::vector<CTxIn> vin;
     const std::vector<CTxOut> vout;
+    const int32_t nVersion;
     const uint32_t nLockTime;
 
 private:
@@ -292,19 +292,23 @@ public:
 
     std::string ToString() const;
 };
+#if defined(__x86_64__)
+static_assert(sizeof(CTransaction) == 88,
+              "sizeof CTransaction is expected to be 88 bytes");
+#endif
 
 /**
  * A mutable version of CTransaction.
  */
 class CMutableTransaction {
 public:
-    int32_t nVersion;
     std::vector<CTxIn> vin;
     std::vector<CTxOut> vout;
+    int32_t nVersion;
     uint32_t nLockTime;
 
     CMutableTransaction();
-    CMutableTransaction(const CTransaction &tx);
+    explicit CMutableTransaction(const CTransaction &tx);
 
     template <typename Stream> inline void Serialize(Stream &s) const {
         SerializeTransaction(*this, s);
@@ -332,6 +336,10 @@ public:
         return a.GetId() == b.GetId();
     }
 };
+#if defined(__x86_64__)
+static_assert(sizeof(CMutableTransaction) == 56,
+              "sizeof CMutableTransaction is expected to be 56 bytes");
+#endif
 
 typedef std::shared_ptr<const CTransaction> CTransactionRef;
 static inline CTransactionRef MakeTransactionRef() {

@@ -67,7 +67,7 @@ template <typename... Args> bool error(const char *fmt, const Args &... args) {
 }
 
 void PrintExceptionContinue(const std::exception *pex, const char *pszThread);
-void FileCommit(FILE *file);
+bool FileCommit(FILE *file);
 bool TruncateFile(FILE *file, unsigned int length);
 int RaiseFileDescriptorLimit(int nMinFD);
 void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length);
@@ -75,6 +75,7 @@ bool RenameOver(fs::path src, fs::path dest);
 bool LockDirectory(const fs::path &directory, const std::string lockfile_name,
                    bool probe_only = false);
 bool DirIsWritable(const fs::path &directory);
+bool CheckDiskSpace(const fs::path &dir, uint64_t nAdditionalBytes = 0);
 
 /**
  * Release all directory locks. This is used for unit testing only, at runtime
@@ -84,7 +85,8 @@ void ReleaseDirectoryLocks();
 
 bool TryCreateDirectories(const fs::path &p);
 fs::path GetDefaultDataDir();
-const fs::path &GetBlocksDir(bool fNetSpecific = true);
+// The blocks directory is always net specific.
+const fs::path &GetBlocksDir();
 const fs::path &GetDataDir(bool fNetSpecific = true);
 void ClearDatadirCache();
 fs::path GetConfigFile(const std::string &confPath);
@@ -118,23 +120,36 @@ enum class OptionsCategory {
     RPC,
     GUI,
     COMMANDS,
-    REGISTER_COMMANDS
+    REGISTER_COMMANDS,
+
+    // Always the last option to avoid printing these in the help
+    HIDDEN,
 };
 
 class ArgsManager {
 protected:
     friend class ArgsManagerHelper;
 
+    struct Arg {
+        std::string m_help_param;
+        std::string m_help_text;
+        bool m_debug_only;
+
+        Arg(const std::string &help_param, const std::string &help_text,
+            bool debug_only)
+            : m_help_param(help_param), m_help_text(help_text),
+              m_debug_only(debug_only){};
+    };
+
     mutable CCriticalSection cs_args;
     std::map<std::string, std::vector<std::string>> m_override_args;
     std::map<std::string, std::vector<std::string>> m_config_args;
     std::string m_network;
     std::set<std::string> m_network_only_args;
-    std::map<std::pair<OptionsCategory, std::string>,
-             std::pair<std::string, bool>>
-        m_available_args;
+    std::map<OptionsCategory, std::map<std::string, Arg>> m_available_args;
 
-    void ReadConfigStream(std::istream &stream);
+    bool ReadConfigStream(std::istream &stream, std::string &error,
+                          bool ignore_invalid_keys = false);
 
 public:
     ArgsManager();
@@ -144,8 +159,9 @@ public:
      */
     void SelectConfigNetwork(const std::string &network);
 
-    void ParseParameters(int argc, const char *const argv[]);
-    void ReadConfigFiles();
+    bool ParseParameters(int argc, const char *const argv[],
+                         std::string &error);
+    bool ReadConfigFiles(std::string &error, bool ignore_invalid_keys = false);
 
     /**
      * Log warnings for options in m_section_only_args when they are specified
@@ -225,7 +241,8 @@ public:
      */
     bool SoftSetBoolArg(const std::string &strArg, bool fValue);
 
-    // Forces a arg setting, used only in testing
+    // Forces an arg setting. Called by SoftSetArg() if the arg hasn't already
+    // been set. Also called directly in testing.
     void ForceSetArg(const std::string &strArg, const std::string &strValue);
 
     // Forces a multi arg setting, used only in testing
@@ -250,9 +267,19 @@ public:
     void ClearArg(const std::string &strArg);
 
     /**
+     * Clear available arguments
+     */
+    void ClearArgs() { m_available_args.clear(); }
+
+    /**
      * Get the help string
      */
     std::string GetHelpMessage();
+
+    /**
+     * Check whether we know of this arg
+     */
+    bool IsArgKnown(const std::string &key, std::string &error);
 };
 
 extern ArgsManager gArgs;
@@ -312,5 +339,19 @@ template <typename Callable> void TraceThread(const char *name, Callable func) {
 }
 
 std::string CopyrightHolders(const std::string &strPrefix);
+
+namespace util {
+
+//! Simplification of std insertion
+template <typename Tdst, typename Tsrc>
+inline void insert(Tdst &dst, const Tsrc &src) {
+    dst.insert(dst.begin(), src.begin(), src.end());
+}
+template <typename TsetT, typename Tsrc>
+inline void insert(std::set<TsetT> &dst, const Tsrc &src) {
+    dst.insert(src.begin(), src.end());
+}
+
+} // namespace util
 
 #endif // BITCOIN_UTIL_H

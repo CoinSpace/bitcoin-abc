@@ -17,7 +17,7 @@
 #include <compat/sanity.h>
 #include <config.h>
 #include <consensus/validation.h>
-#include <diskblockpos.h>
+#include <flatfile.h>
 #include <fs.h>
 #include <httprpc.h>
 #include <httpserver.h>
@@ -312,11 +312,11 @@ static void registerSignalHandler(int signal, void (*handler)(int)) {
 }
 #endif
 
-void OnRPCStarted() {
+static void OnRPCStarted() {
     uiInterface.NotifyBlockTip.connect(&RPCNotifyBlockChange);
 }
 
-void OnRPCStopped() {
+static void OnRPCStopped() {
     uiInterface.NotifyBlockTip.disconnect(&RPCNotifyBlockChange);
     RPCNotifyBlockChange(false, nullptr);
     g_best_block_cv.notify_all();
@@ -554,6 +554,11 @@ void SetupServerArgs() {
                  _("Query for peer addresses via DNS lookup, if low on "
                    "addresses (default: 1 unless -connect/-noconnect)"),
                  false, OptionsCategory::CONNECTION);
+    gArgs.AddArg("-enablebip61",
+                 strprintf(_("Send reject messages per BIP61 (default: %u)"),
+                           DEFAULT_ENABLE_BIP61),
+                 false, OptionsCategory::CONNECTION);
+
     gArgs.AddArg("-externalip=<ip>", _("Specify your own public address"),
                  false, OptionsCategory::CONNECTION);
     gArgs.AddArg(
@@ -670,18 +675,6 @@ void SetupServerArgs() {
                        "already in the mempool, useful e.g. for a gateway"),
                  false, OptionsCategory::CONNECTION);
     gArgs.AddArg(
-        "-whitelistrelay",
-        strprintf(_("Accept relayed transactions received from whitelisted "
-                    "peers even when not relaying transactions (default: %d)"),
-                  DEFAULT_WHITELISTRELAY),
-        false, OptionsCategory::CONNECTION);
-    gArgs.AddArg(
-        "-whitelistforcerelay",
-        strprintf(_("Force relay of transactions from whitelisted peers even "
-                    "if they violate local relay policy (default: %d)"),
-                  DEFAULT_WHITELISTFORCERELAY),
-        false, OptionsCategory::CONNECTION);
-    gArgs.AddArg(
         "-maxuploadtarget=<n>",
         strprintf(_("Tries to keep outbound traffic under the given target (in "
                     "MiB per 24h), 0 = no limit (default: %d)"),
@@ -720,7 +713,7 @@ void SetupServerArgs() {
         "-checkblockindex",
         strprintf("Do a full consistency check for mapBlockIndex, "
                   "setBlockIndexCandidates, chainActive and mapBlocksUnlinked "
-                  "occasionally. Also sets -checkmempool (default: %u)",
+                  "occasionally. (default: %u)",
                   defaultChainParams->DefaultConsistencyChecks()),
         true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg("-checkmempool=<n>",
@@ -827,13 +820,6 @@ void SetupServerArgs() {
                            "initial block download (default: %u)",
                            DEFAULT_MAX_TIP_AGE),
                  true, OptionsCategory::DEBUG_TEST);
-    gArgs.AddArg(
-        "-maxtxfee=<amt>",
-        strprintf(_("Maximum total fees (in %s) to use in a single wallet "
-                    "transaction or raw transaction; setting this too low may "
-                    "abort large transactions (default: %s)"),
-                  CURRENCY_UNIT, FormatMoney(DEFAULT_TRANSACTION_MAXFEE)),
-        false, OptionsCategory::DEBUG_TEST);
 
     gArgs.AddArg(
         "-printtoconsole",
@@ -905,6 +891,18 @@ void SetupServerArgs() {
             _("Fees (in %s/kB) smaller than this are considered zero fee for "
               "relaying, mining and transaction creation (default: %s)"),
             CURRENCY_UNIT, FormatMoney(DEFAULT_MIN_RELAY_TX_FEE_PER_KB)),
+        false, OptionsCategory::NODE_RELAY);
+    gArgs.AddArg(
+        "-whitelistrelay",
+        strprintf(_("Accept relayed transactions received from whitelisted "
+                    "peers even when not relaying transactions (default: %d)"),
+                  DEFAULT_WHITELISTRELAY),
+        false, OptionsCategory::NODE_RELAY);
+    gArgs.AddArg(
+        "-whitelistforcerelay",
+        strprintf(_("Force relay of transactions from whitelisted peers even "
+                    "if they violate local relay policy (default: %d)"),
+                  DEFAULT_WHITELISTFORCERELAY),
         false, OptionsCategory::NODE_RELAY);
 
     // Not sure this really belongs here, but it will do for now.
@@ -996,6 +994,26 @@ void SetupServerArgs() {
                  strprintf("Timeout during HTTP requests (default: %d)",
                            DEFAULT_HTTP_SERVER_TIMEOUT),
                  true, OptionsCategory::RPC);
+
+    // Hidden options
+    gArgs.AddArg("-rpcssl", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-benchmark", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-h", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-help", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-socks", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-tor", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-debugnet", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-whitelistalwaysrelay", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-blockminsize", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-dbcrashratio", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-forcecompactdb", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-usehd", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-parkdeepreorg", "", false, OptionsCategory::HIDDEN);
+    gArgs.AddArg("-replayprotectionactivationtime", "", false,
+                 OptionsCategory::HIDDEN);
+
+    // TODO remove after the Nov 2019 upgrade
+    gArgs.AddArg("-gravitonactivationtime", "", false, OptionsCategory::HIDDEN);
 }
 
 std::string LicenseInfo() {
@@ -1074,7 +1092,7 @@ struct CImportingNow {
 // rewritten by the reindex anyway. This ensures that vinfoBlockFile is in sync
 // with what's actually on disk by the time we start downloading, so that
 // pruning works correctly.
-void CleanupBlockRevFiles() {
+static void CleanupBlockRevFiles() {
     std::map<std::string, fs::path> mapBlockFiles;
 
     // Glob all blk?????.dat and rev?????.dat files from the blocks directory.
@@ -1085,7 +1103,7 @@ void CleanupBlockRevFiles() {
     fs::path blocksdir = GetBlocksDir();
     for (fs::directory_iterator it(blocksdir); it != fs::directory_iterator();
          it++) {
-        if (is_regular_file(*it) &&
+        if (fs::is_regular_file(*it) &&
             it->path().filename().string().length() == 12 &&
             it->path().filename().string().substr(8, 4) == ".dat") {
             if (it->path().filename().string().substr(0, 3) == "blk") {
@@ -1102,7 +1120,7 @@ void CleanupBlockRevFiles() {
     // a separate counter. Once we hit a gap (or if 0 doesn't exist) start
     // removing block files.
     int nContigCounter = 0;
-    for (const std::pair<std::string, fs::path> &item : mapBlockFiles) {
+    for (const std::pair<const std::string, fs::path> &item : mapBlockFiles) {
         if (atoi(item.first) == nContigCounter) {
             nContigCounter++;
             continue;
@@ -1111,7 +1129,8 @@ void CleanupBlockRevFiles() {
     }
 }
 
-void ThreadImport(const Config &config, std::vector<fs::path> vImportFiles) {
+static void ThreadImport(const Config &config,
+                         std::vector<fs::path> vImportFiles) {
     RenameThread("bitcoin-loadblk");
 
     {
@@ -1122,7 +1141,7 @@ void ThreadImport(const Config &config, std::vector<fs::path> vImportFiles) {
             int nFile = 0;
             while (true) {
                 CDiskBlockPos pos(nFile, 0);
-                if (!fs::exists(GetBlockPosFilename(pos, "blk"))) {
+                if (!fs::exists(GetBlockPosFilename(pos))) {
                     // No block files left to reindex
                     break;
                 }
@@ -1197,7 +1216,7 @@ void ThreadImport(const Config &config, std::vector<fs::path> vImportFiles) {
  *  Ensure that Bitcoin is running in a usable environment with all
  *  necessary library support.
  */
-bool InitSanityCheck(void) {
+static bool InitSanityCheck() {
     if (!ECC_InitSanityCheck()) {
         InitError(
             "Elliptic curve cryptography sanity check failure. Aborting.");
@@ -1450,7 +1469,7 @@ bool AppInitParameterInteraction(Config &config) {
 
     // also see: InitParameterInteraction()
 
-    if (!fs::is_directory(GetBlocksDir(false))) {
+    if (!fs::is_directory(GetBlocksDir())) {
         return InitError(
             strprintf(_("Specified blocks directory \"%s\" does not exist.\n"),
                       gArgs.GetArg("-blocksdir", "").c_str()));
@@ -1515,11 +1534,12 @@ bool AppInitParameterInteraction(Config &config) {
         if (find(categories.begin(), categories.end(), std::string("0")) ==
             categories.end()) {
             for (const auto &cat : categories) {
-                BCLog::LogFlags flag;
+                BCLog::LogFlags flag = BCLog::NONE;
                 if (!GetLogCategory(flag, cat)) {
                     InitWarning(
                         strprintf(_("Unsupported logging category %s=%s."),
                                   "-debug", cat));
+                    continue;
                 }
                 GetLogger().EnableCategory(flag);
             }
@@ -1528,10 +1548,11 @@ bool AppInitParameterInteraction(Config &config) {
 
     // Now remove the logging categories which were explicitly excluded
     for (const std::string &cat : gArgs.GetArgs("-debugexclude")) {
-        BCLog::LogFlags flag;
+        BCLog::LogFlags flag = BCLog::NONE;
         if (!GetLogCategory(flag, cat)) {
             InitWarning(strprintf(_("Unsupported logging category %s=%s."),
                                   "-debugexclude", cat));
+            continue;
         }
         GetLogger().DisableCategory(flag);
     }
@@ -1701,21 +1722,15 @@ bool AppInitParameterInteraction(Config &config) {
         config.SetExcessUTXOCharge(DEFAULT_UTXO_FEE);
     }
 
-    // Fee-per-kilobyte amount considered the same as "free". If you are mining,
-    // be careful setting this: if you set it to zero then a transaction spammer
-    // can cheaply fill blocks using 1-satoshi-fee transactions. It should be
-    // set above the real cost to you of processing a transaction.
     if (gArgs.IsArgSet("-minrelaytxfee")) {
         Amount n = Amount::zero();
         auto parsed = ParseMoney(gArgs.GetArg("-minrelaytxfee", ""), n);
-        if (!parsed || Amount::zero() == n) {
+        if (!parsed || n == Amount::zero()) {
             return InitError(AmountErrMsg("minrelaytxfee",
                                           gArgs.GetArg("-minrelaytxfee", "")));
         }
         // High fee check is done afterward in WalletParameterInteraction()
-        config.SetMinFeePerKB(CFeeRate(n));
-    } else {
-        config.SetMinFeePerKB(CFeeRate(DEFAULT_MIN_RELAY_TX_FEE_PER_KB));
+        ::minRelayTxFee = CFeeRate(n);
     }
 
     // Sanity check argument for min fee for including tx in block
@@ -1770,6 +1785,8 @@ bool AppInitParameterInteraction(Config &config) {
     // TODO: remove some time after the hardfork when no longer needed
     // to differentiate the network nodes.
     nLocalServices = ServiceFlags(nLocalServices | NODE_BITCOIN_CASH);
+
+    g_enable_bip61 = gArgs.GetBoolArg("-enablebip61", DEFAULT_ENABLE_BIP61);
 
     nMaxTipAge = gArgs.GetArg("-maxtipage", DEFAULT_MAX_TIP_AGE);
 
@@ -2311,10 +2328,9 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
         LogPrintf(" block index %15dms\n", GetTimeMillis() - nStart);
     }
 
-    // Encoded addresses using cashaddr instead of base58
-    // Activates by default on Jan, 14
-    config.SetCashAddrEncoding(
-        gArgs.GetBoolArg("-usecashaddr", GetAdjustedTime() > 1515900000));
+    // Encoded addresses using cashaddr instead of base58.
+    // We do this by default to avoid confusion with BTC addresses.
+    config.SetCashAddrEncoding(gArgs.GetBoolArg("-usecashaddr", true));
 
     // Step 8: load indexers
     if (gArgs.GetBoolArg("-txindex", DEFAULT_TXINDEX)) {
@@ -2341,12 +2357,12 @@ bool AppInitMain(Config &config, RPCServer &rpcServer,
     }
 
     // Step 11: import blocks
-    if (!CheckDiskSpace(/* additional_bytes */ 0, /* blocks_dir */ false)) {
+    if (!CheckDiskSpace(GetDataDir())) {
         InitError(
             strprintf(_("Error: Disk space is low for %s"), GetDataDir()));
         return false;
     }
-    if (!CheckDiskSpace(/* additional_bytes */ 0, /* blocks_dir */ true)) {
+    if (!CheckDiskSpace(GetBlocksDir())) {
         InitError(
             strprintf(_("Error: Disk space is low for %s"), GetBlocksDir()));
         return false;

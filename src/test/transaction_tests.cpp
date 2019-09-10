@@ -39,6 +39,12 @@ typedef std::vector<uint8_t> valtype;
 
 BOOST_FIXTURE_TEST_SUITE(transaction_tests, BasicTestingSetup)
 
+static COutPoint buildOutPoint(const UniValue &vinput) {
+    TxId txid;
+    txid.SetHex(vinput[0].get_str());
+    return COutPoint(txid, vinput[1].get_int());
+}
+
 BOOST_AUTO_TEST_CASE(tx_valid) {
     // Read tests from test/data/tx_valid.json
     // Format is an array of arrays
@@ -78,8 +84,7 @@ BOOST_AUTO_TEST_CASE(tx_valid) {
                     fValid = false;
                     break;
                 }
-                COutPoint outpoint(uint256S(vinput[0].get_str()),
-                                   vinput[1].get_int());
+                COutPoint outpoint = buildOutPoint(vinput);
                 mapprevOutScriptPubKeys[outpoint] =
                     ParseScript(vinput[2].get_str());
                 if (vinput.size() >= 4) {
@@ -133,7 +138,7 @@ BOOST_AUTO_TEST_CASE(tx_valid) {
                         TransactionSignatureChecker(&tx, i, amount, txdata),
                         &err),
                     strTest);
-                BOOST_CHECK_MESSAGE(err == SCRIPT_ERR_OK,
+                BOOST_CHECK_MESSAGE(err == ScriptError::OK,
                                     ScriptErrorString(err));
             }
         }
@@ -154,9 +159,9 @@ BOOST_AUTO_TEST_CASE(tx_invalid) {
         std::string(json_tests::tx_invalid,
                     json_tests::tx_invalid + sizeof(json_tests::tx_invalid)));
 
-    // Initialize to SCRIPT_ERR_OK. The tests expect err to be changed to a
-    // value other than SCRIPT_ERR_OK.
-    ScriptError err = SCRIPT_ERR_OK;
+    // Initialize to ScriptError::OK. The tests expect err to be changed to a
+    // value other than ScriptError::OK.
+    ScriptError err = ScriptError::OK;
     for (size_t idx = 0; idx < tests.size(); idx++) {
         UniValue test = tests[idx];
         std::string strTest = test.write();
@@ -181,8 +186,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid) {
                     fValid = false;
                     break;
                 }
-                COutPoint outpoint(uint256S(vinput[0].get_str()),
-                                   vinput[1].get_int());
+                COutPoint outpoint = buildOutPoint(vinput);
                 mapprevOutScriptPubKeys[outpoint] =
                     ParseScript(vinput[2].get_str());
                 if (vinput.size() >= 4) {
@@ -222,7 +226,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid) {
                     TransactionSignatureChecker(&tx, i, amount, txdata), &err);
             }
             BOOST_CHECK_MESSAGE(!fValid, strTest);
-            BOOST_CHECK_MESSAGE(err != SCRIPT_ERR_OK, ScriptErrorString(err));
+            BOOST_CHECK_MESSAGE(err != ScriptError::OK, ScriptErrorString(err));
         }
     }
 }
@@ -335,9 +339,11 @@ BOOST_AUTO_TEST_CASE(test_Get) {
                       (50 + 21 + 22) * CENT);
 }
 
-void CreateCreditAndSpend(const CKeyStore &keystore, const CScript &outscript,
-                          CTransactionRef &output, CMutableTransaction &input,
-                          bool success = true) {
+static void CreateCreditAndSpend(const CKeyStore &keystore,
+                                 const CScript &outscript,
+                                 CTransactionRef &output,
+                                 CMutableTransaction &input,
+                                 bool success = true) {
     CMutableTransaction outputm;
     outputm.nVersion = 1;
     outputm.vin.resize(1);
@@ -373,8 +379,9 @@ void CreateCreditAndSpend(const CKeyStore &keystore, const CScript &outscript,
     BOOST_CHECK(input.vout[0] == inputm.vout[0]);
 }
 
-void CheckWithFlag(const CTransactionRef &output,
-                   const CMutableTransaction &input, int flags, bool success) {
+static void CheckWithFlag(const CTransactionRef &output,
+                          const CMutableTransaction &input, int flags,
+                          bool success) {
     ScriptError error;
     CTransaction inputi(input);
     bool ret = VerifyScript(
@@ -399,7 +406,7 @@ static CScript PushAll(const std::vector<valtype> &values) {
     return result;
 }
 
-void ReplaceRedeemScript(CScript &script, const CScript &redeemScript) {
+static void ReplaceRedeemScript(CScript &script, const CScript &redeemScript) {
     std::vector<valtype> stack;
     EvalScript(stack, script, SCRIPT_VERIFY_STRICTENC, BaseSignatureChecker());
     BOOST_CHECK(stack.size() > 0);
@@ -435,8 +442,8 @@ BOOST_AUTO_TEST_CASE(test_big_transaction) {
 
     for (size_t ij = 0; ij < OUTPUT_COUNT; ij++) {
         size_t i = mtx.vin.size();
-        uint256 prevId = uint256S(
-            "0000000000000000000000000000000000000000000000000000000000000100");
+        TxId prevId(uint256S("0000000000000000000000000000000000000000000000000"
+                             "000000000000100"));
         COutPoint outpoint(prevId, i);
 
         mtx.vin.resize(mtx.vin.size() + 1);

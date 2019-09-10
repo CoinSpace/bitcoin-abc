@@ -146,7 +146,7 @@ public:
      * but only GUI RPC console, and to break the dependency of pcserver on
      * httprpc.
      */
-    virtual RPCTimerBase *NewTimer(std::function<void(void)> &func,
+    virtual RPCTimerBase *NewTimer(std::function<void()> &func,
                                    int64_t millis) = 0;
 };
 
@@ -169,7 +169,7 @@ void RPCUnsetTimerInterface(RPCTimerInterface *iface);
  * Run func nSeconds from now.
  * Overrides previous timer <name> (if any).
  */
-void RPCRunLater(const std::string &name, std::function<void(void)> func,
+void RPCRunLater(const std::string &name, std::function<void()> func,
                  int64_t nSeconds);
 
 typedef UniValue (*rpcfn_type)(Config &config,
@@ -268,7 +268,6 @@ extern std::vector<uint8_t> ParseHexV(const UniValue &v, std::string strName);
 extern std::vector<uint8_t> ParseHexO(const UniValue &o, std::string strKey);
 
 extern Amount AmountFromValue(const UniValue &value);
-extern UniValue ValueFromAmount(const Amount amount);
 extern std::string HelpExampleCli(const std::string &methodname,
                                   const std::string &args);
 extern std::string HelpExampleRpc(const std::string &methodname,

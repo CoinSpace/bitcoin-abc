@@ -53,6 +53,12 @@ struct CTxMemPoolModifiedEntry {
         nSigOpCountWithAncestors = entry->GetSigOpCountWithAncestors();
     }
 
+    Amount GetModifiedFee() const { return iter->GetModifiedFee(); }
+    uint64_t GetSizeWithAncestors() const { return nSizeWithAncestors; }
+    Amount GetModFeesWithAncestors() const { return nModFeesWithAncestors; }
+    size_t GetTxSize() const { return iter->GetTxSize(); }
+    const CTransaction &GetTx() const { return iter->GetTx(); }
+
     CTxMemPool::txiter iter;
     uint64_t nSizeWithAncestors;
     Amount nModFeesWithAncestors;
@@ -79,21 +85,6 @@ struct modifiedentry_iter {
     }
 };
 
-// This matches the calculation in CompareTxMemPoolEntryByAncestorFee,
-// except operating on CTxMemPoolModifiedEntry.
-// TODO: refactor to avoid duplication of this logic.
-struct CompareModifiedEntry {
-    bool operator()(const CTxMemPoolModifiedEntry &a,
-                    const CTxMemPoolModifiedEntry &b) const {
-        double f1 = b.nSizeWithAncestors * (a.nModFeesWithAncestors / SATOSHI);
-        double f2 = a.nSizeWithAncestors * (b.nModFeesWithAncestors / SATOSHI);
-        if (f1 == f2) {
-            return CTxMemPool::CompareIteratorByHash()(a.iter, b.iter);
-        }
-        return f1 > f2;
-    }
-};
-
 // A comparator that sorts transactions based on number of ancestors.
 // This is sufficient to sort an ancestor package in an order that is valid
 // to appear in a block.
@@ -117,7 +108,7 @@ typedef boost::multi_index_container<
             // Reuse same tag from CTxMemPool's similar index
             boost::multi_index::tag<ancestor_score>,
             boost::multi_index::identity<CTxMemPoolModifiedEntry>,
-            CompareModifiedEntry>>>
+            CompareTxMemPoolEntryByAncestorFee>>>
     indexed_modified_transaction_set;
 
 typedef indexed_modified_transaction_set::nth_index<0>::type::iterator
@@ -184,13 +175,14 @@ private:
 
     // Methods for how to add transactions to a block.
     /** Add transactions based on tx "priority" */
-    void addPriorityTxs();
+    void addPriorityTxs() EXCLUSIVE_LOCKS_REQUIRED(mempool->cs);
     /**
      * Add transactions based on feerate including unconfirmed ancestors.
      * Increments nPackagesSelected / nDescendantsUpdated with corresponding
      * statistics from the package selection (for logging statistics).
      */
-    void addPackageTxs(int &nPackagesSelected, int &nDescendantsUpdated);
+    void addPackageTxs(int &nPackagesSelected, int &nDescendantsUpdated)
+        EXCLUSIVE_LOCKS_REQUIRED(mempool->cs);
 
     /** Enum for the results from TestForBlock */
     enum class TestForBlockResult : uint8_t {
@@ -203,7 +195,8 @@ private:
     /** Test if tx will still "fit" in the block */
     TestForBlockResult TestForBlock(CTxMemPool::txiter iter);
     /** Test if tx still has unconfirmed parents not yet in block */
-    bool isStillDependent(CTxMemPool::txiter iter);
+    bool isStillDependent(CTxMemPool::txiter iter)
+        EXCLUSIVE_LOCKS_REQUIRED(mempool->cs);
 
     // helper functions for addPackageTxs()
     /** Remove confirmed (inBlock) entries from given set */
@@ -223,10 +216,10 @@ private:
      */
     bool SkipMapTxEntry(CTxMemPool::txiter it,
                         indexed_modified_transaction_set &mapModifiedTx,
-                        CTxMemPool::setEntries &failedTx);
+                        CTxMemPool::setEntries &failedTx)
+        EXCLUSIVE_LOCKS_REQUIRED(mempool->cs);
     /** Sort the package in an order that is valid to appear in a block */
     void SortForBlock(const CTxMemPool::setEntries &package,
-                      CTxMemPool::txiter entry,
                       std::vector<CTxMemPool::txiter> &sortedEntries);
     /**
      * Add descendants of given transactions to mapModifiedTx with ancestor
@@ -234,7 +227,8 @@ private:
      * updated descendants.
      */
     int UpdatePackagesForAdded(const CTxMemPool::setEntries &alreadyAdded,
-                               indexed_modified_transaction_set &mapModifiedTx);
+                               indexed_modified_transaction_set &mapModifiedTx)
+        EXCLUSIVE_LOCKS_REQUIRED(mempool->cs);
 };
 
 /** Modify the extranonce in a block */

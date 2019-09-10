@@ -2,6 +2,16 @@
 # Copyright (c) 2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
+"""Test NULLDUMMY softfork.
+
+Connect to a single node.
+Generate 2 blocks (save the coinbases for later).
+Generate 427 more blocks.
+[Policy/Consensus] Check that NULLDUMMY compliant transactions are accepted in the 430th block.
+[Policy] Check that non-NULLDUMMY transactions are rejected before activation.
+[Consensus] Check that the new NULLDUMMY rules are not enforced on the 431st block.
+[Policy/Consensus] Check that the new NULLDUMMY rules are enforced on the 432nd block.
+"""
 
 import time
 
@@ -12,7 +22,13 @@ from test_framework.script import CScript
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
-NULLDUMMY_ERROR = "64: non-mandatory-script-verify-flag (Dummy CHECKMULTISIG argument must be zero)"
+# This test checks for a reject reason that changes after the graviton
+# upgrade. Since the nulldummy effect and this test are destined to be removed
+# after the upgrade anyway, we run this test pre-upgrade only.
+# More detailed dummy tests can be found in abc-schnorrmultisig-activation.py.
+GRAVITON_START_TIME = 2000000000
+
+NULLDUMMY_ERROR = "non-mandatory-script-verify-flag (Dummy CHECKMULTISIG argument must be zero) (code 64)"
 
 
 def trueDummy(tx):
@@ -28,24 +44,13 @@ def trueDummy(tx):
     tx.rehash()
 
 
-'''
-This test is meant to exercise NULLDUMMY softfork.
-Connect to a single node.
-Generate 2 blocks (save the coinbases for later).
-Generate 427 more blocks.
-[Policy/Consensus] Check that NULLDUMMY compliant transactions are accepted in the 430th block.
-[Policy] Check that non-NULLDUMMY transactions are rejected before activation.
-[Consensus] Check that the new NULLDUMMY rules are not enforced on the 431st block.
-[Policy/Consensus] Check that the new NULLDUMMY rules are enforced on the 432nd block.
-'''
-
-
 class NULLDUMMYTest(BitcoinTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 1
         self.setup_clean_chain = True
-        self.extra_args = [['-whitelist=127.0.0.1']]
+        self.extra_args = [['-whitelist=127.0.0.1',
+                            "-gravitonactivationtime={}".format(GRAVITON_START_TIME)]]
 
     def run_test(self):
         self.address = self.nodes[0].getnewaddress()

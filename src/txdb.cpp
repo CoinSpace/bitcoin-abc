@@ -52,7 +52,7 @@ struct CoinEntry {
 
     template <typename Stream> void Unserialize(Stream &s) {
         s >> key;
-        uint256 id;
+        TxId id;
         s >> id;
         uint32_t n = 0;
         s >> VARINT(n);
@@ -448,7 +448,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts(
 
         CDiskBlockIndex diskindex;
         if (!pcursor->GetValue(diskindex)) {
-            return error("LoadBlockIndex() : failed to read value");
+            return error("%s : failed to read value", __func__);
         }
 
         // Construct block index object
@@ -468,7 +468,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts(
 
         if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits,
                               config)) {
-            return error("LoadBlockIndex(): CheckProofOfWork failed: %s",
+            return error("%s: CheckProofOfWork failed: %s", __func__,
                          pindexNew->ToString());
         }
 

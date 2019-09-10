@@ -421,7 +421,7 @@ bool InitHTTPServer(Config &config) {
     LogPrintf("HTTP: creating work queue of depth %d\n", workQueueDepth);
 
     workQueue = new WorkQueue<HTTPClosure>(workQueueDepth);
-    // tranfer ownership to eventBase/HTTP via .release()
+    // transfer ownership to eventBase/HTTP via .release()
     eventBase = base_ctr.release();
     eventHTTP = http_ctr.release();
     return true;
@@ -513,7 +513,7 @@ static void httpevent_callback_fn(evutil_socket_t, short, void *data) {
 }
 
 HTTPEvent::HTTPEvent(struct event_base *base, bool _deleteWhenTriggered,
-                     const std::function<void(void)> &_handler)
+                     const std::function<void()> &_handler)
     : deleteWhenTriggered(_deleteWhenTriggered), handler(_handler) {
     ev = event_new(base, -1, 0, httpevent_callback_fn, this);
     assert(ev);
