@@ -105,12 +105,12 @@ public:
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S(
-            "000000000000000000000000000000000000000000f82892fe397d90089a49a5");
+            "000000000000000000000000000000000000000000fb3f4a1b1be99638d82790");
 
         // By default assume that the signatures in ancestors of this block are
         // valid.
         consensus.defaultAssumeValid = uint256S(
-            "0000000000000000025e589b280d1d947cded3c29a7881ad9bdea722269452be");
+            "000000000000000001beee8cc62754955b00233585d2c14ae26d0f3a5d1fb708");
 
         // August 1, 2017 hard fork
         consensus.uahfHeight = 478558;
@@ -123,6 +123,9 @@ public:
 
         // Nov 15, 2019 12:00:00 UTC protocol upgrade
         consensus.gravitonActivationTime = 1573819200;
+
+        // May 15, 2020 12:00:00 UTC protocol upgrade
+        consensus.phononActivationTime = 1589544000;
 
         /**
          * The message start string is designed to be unlikely to occur in
@@ -287,6 +290,9 @@ public:
         // Nov 15, 2019 12:00:00 UTC protocol upgrade
         consensus.gravitonActivationTime = 1573819200;
 
+        // May 15, 2020 12:00:00 UTC protocol upgrade
+        consensus.phononActivationTime = 1589544000;
+
         diskMagic[0] = 0x0b;
         diskMagic[1] = 0x11;
         diskMagic[2] = 0x09;
@@ -401,6 +407,9 @@ public:
 
         // Nov 15, 2019 12:00:00 UTC protocol upgrade
         consensus.gravitonActivationTime = 1573819200;
+
+        // May 15, 2020 12:00:00 UTC protocol upgrade
+        consensus.phononActivationTime = 1589544000;
 
         diskMagic[0] = 0xfa;
         diskMagic[1] = 0xbf;

@@ -17,40 +17,38 @@ FlatFileSeq::FlatFileSeq(fs::path dir, const char *prefix, size_t chunk_size)
     }
 }
 
-std::string CDiskBlockPos::ToString() const {
-    return strprintf("CDiskBlockPos(nFile=%i, nPos=%i)", nFile, nPos);
+std::string FlatFilePos::ToString() const {
+    return strprintf("FlatFilePos(nFile=%i, nPos=%i)", nFile, nPos);
 }
 
-fs::path FlatFileSeq::FileName(const CDiskBlockPos &pos) const {
+fs::path FlatFileSeq::FileName(const FlatFilePos &pos) const {
     return m_dir / strprintf("%s%05u.dat", m_prefix, pos.nFile);
 }
 
-FILE *FlatFileSeq::Open(const CDiskBlockPos &pos, bool fReadOnly) {
+FILE *FlatFileSeq::Open(const FlatFilePos &pos, bool read_only) {
     if (pos.IsNull()) {
         return nullptr;
     }
     fs::path path = FileName(pos);
     fs::create_directories(path.parent_path());
-    FILE *file = fsbridge::fopen(path, fReadOnly ? "rb" : "rb+");
-    if (!file && !fReadOnly) {
+    FILE *file = fsbridge::fopen(path, read_only ? "rb" : "rb+");
+    if (!file && !read_only) {
         file = fsbridge::fopen(path, "wb+");
     }
     if (!file) {
         LogPrintf("Unable to open file %s\n", path.string());
         return nullptr;
     }
-    if (pos.nPos) {
-        if (fseek(file, pos.nPos, SEEK_SET)) {
-            LogPrintf("Unable to seek to position %u of %s\n", pos.nPos,
-                      path.string());
-            fclose(file);
-            return nullptr;
-        }
+    if (pos.nPos && fseek(file, pos.nPos, SEEK_SET)) {
+        LogPrintf("Unable to seek to position %u of %s\n", pos.nPos,
+                  path.string());
+        fclose(file);
+        return nullptr;
     }
     return file;
 }
 
-size_t FlatFileSeq::Allocate(const CDiskBlockPos &pos, size_t add_size,
+size_t FlatFileSeq::Allocate(const FlatFilePos &pos, size_t add_size,
                              bool &out_of_space) {
     out_of_space = false;
 
@@ -78,9 +76,9 @@ size_t FlatFileSeq::Allocate(const CDiskBlockPos &pos, size_t add_size,
     return 0;
 }
 
-bool FlatFileSeq::Flush(const CDiskBlockPos &pos, bool finalize) {
+bool FlatFileSeq::Flush(const FlatFilePos &pos, bool finalize) {
     // Avoid fseek to nPos
-    FILE *file = Open(CDiskBlockPos(pos.nFile, 0));
+    FILE *file = Open(FlatFilePos(pos.nFile, 0));
     if (!file) {
         return error("%s: failed to open file %d", __func__, pos.nFile);
     }

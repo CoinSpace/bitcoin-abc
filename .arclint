@@ -135,6 +135,24 @@
         "lint-python-encoding": {
             "type": "lint-python-encoding",
             "include": "(\\.py$)"
+        },
+        "lint-python-shebang": {
+            "type": "lint-python-shebang",
+            "include": "(\\.py$)",
+            "exclude": [
+                "(__init__\\.py$)"
+            ]
+        },
+        "lint-bash-shebang": {
+            "type": "lint-bash-shebang",
+            "include": "(\\.sh$)"
+        },
+        "shellcheck": {
+            "type": "shellcheck",
+            "include": "(\\.sh$)",
+            "exclude": [
+                "(^src/(secp256k1|univalue)/)"
+            ]
         }
     }
 }

@@ -11,6 +11,7 @@ phutil_register_library_map(array(
   'class' => array(
     'AssertWithSideEffectsLinter' => 'linter/AssertWithSideEffectsLinter.php',
     'AutoPEP8FormatLinter' => 'linter/AutoPEP8Linter.php',
+    'BashShebangLinter' => 'linter/BashShebangLinter.php',
     'BoostDependenciesLinter' => 'linter/BoostDependenciesLinter.php',
     'CHeaderLinter' => 'linter/CHeaderLinter.php',
     'CheckDocLinter' => 'linter/CheckDocLinter.php',
@@ -27,6 +28,8 @@ phutil_register_library_map(array(
     'LocaleDependenceLinter' => 'linter/LocaleDependenceLinter.php',
     'PythonFormatLinter' => 'linter/PythonFormatLinter.php',
     'PythonOpenFileEncodingLinter' => 'linter/PythonOpenFileEncodingLinter.php',
+    'PythonShebangLinter' => 'linter/PythonShebangLinter.php',
+    'ShellCheckLinter' => 'linter/ShellCheckLinter.php',
     'StdintLinter' => 'linter/StdintLinter.php',
     'TestsLinter' => 'linter/TestsLinter.php',
   ),
@@ -34,6 +37,7 @@ phutil_register_library_map(array(
   'xmap' => array(
     'AssertWithSideEffectsLinter' => 'ArcanistLinter',
     'AutoPEP8FormatLinter' => 'ArcanistExternalLinter',
+    'BashShebangLinter' => 'ArcanistLinter',
     'BoostDependenciesLinter' => 'GlobalExternalLinter',
     'CHeaderLinter' => 'ArcanistLinter',
     'CheckDocLinter' => 'GlobalExternalLinter',
@@ -52,6 +56,8 @@ phutil_register_library_map(array(
     'LocaleDependenceLinter' => 'ArcanistLinter',
     'PythonFormatLinter' => 'ArcanistExternalLinter',
     'PythonOpenFileEncodingLinter' => 'ArcanistLinter',
+    'PythonShebangLinter' => 'ArcanistLinter',
+    'ShellCheckLinter' => 'ArcanistExternalLinter',
     'StdintLinter' => 'ArcanistLinter',
     'TestsLinter' => 'ArcanistExternalLinter',
   ),

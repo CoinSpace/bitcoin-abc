@@ -1349,6 +1349,9 @@ static UniValue sendmany(const Config &config, const JSONRPCRequest &request) {
                            "Account has insufficient funds");
     }
 
+    // Shuffle recipient list
+    std::shuffle(vecSend.begin(), vecSend.end(), FastRandomContext());
+
     // Send
     CReserveKey keyChange(pwallet);
     Amount nFeeRequired = Amount::zero();
@@ -1682,7 +1685,7 @@ static UniValue listreceivedbyaddress(const Config &config,
             "    \"label\" : \"label\",               (string) The label of "
             "the receiving address. The default label is \"\".\n"
             "    \"txids\": [\n"
-            "       n,                                (numeric) The ids of "
+            "       \"txid\",                         (string) The ids of "
             "transactions received with the address \n"
             "       ...\n"
             "    ]\n"

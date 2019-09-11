@@ -1,6 +1,47 @@
 Developer Notes
 ===============
 
+<!-- markdown-toc start -->
+**Table of Contents**
+
+- [Developer Notes](#developer-notes)
+    - [Coding Style](#coding-style)
+    - [Doxygen comments](#doxygen-comments)
+    - [Development tips and tricks](#development-tips-and-tricks)
+        - [Compiling for debugging](#compiling-for-debugging)
+        - [Compiling for gprof profiling](#compiling-for-gprof-profiling)
+        - [debug.log](#debuglog)
+        - [Writing tests](#writing-tests)
+        - [Writing script integration tests](#writing-script-integration-tests)
+        - [Testnet and Regtest modes](#testnet-and-regtest-modes)
+        - [DEBUG_LOCKORDER](#debug_lockorder)
+        - [Valgrind suppressions file](#valgrind-suppressions-file)
+        - [Compiling for test coverage](#compiling-for-test-coverage)
+        - [Sanitizers](#sanitizers)
+    - [Locking/mutex usage notes](#lockingmutex-usage-notes)
+    - [Threads](#threads)
+    - [Ignoring IDE/editor files](#ignoring-ideeditor-files)
+- [Development guidelines](#development-guidelines)
+    - [Wallet](#wallet)
+    - [General C++](#general-c)
+    - [C++ data structures](#c-data-structures)
+    - [Strings and formatting](#strings-and-formatting)
+    - [Variable names](#variable-names)
+    - [Threads and synchronization](#threads-and-synchronization)
+    - [Scripts](#scripts)
+        - [Shebang](#shebang)
+    - [Source code organization](#source-code-organization)
+    - [GUI](#gui)
+    - [Unit tests](#unit-tests)
+    - [Subtrees](#subtrees)
+    - [Git and GitHub tips](#git-and-github-tips)
+    - [RPC interface guidelines](#rpc-interface-guidelines)
+
+<!-- markdown-toc end -->
+
+Coding Style
+---------------
+
 Various coding styles have been used during the history of the codebase,
 and the result is not very consistent. However, we're now trying to converge to
 a single style, so please use it in new code. Old code will be converted
@@ -166,29 +207,33 @@ doxygen doc/Doxyfile
 Development tips and tricks
 ---------------------------
 
-**compiling for debugging**
+### Compiling for debugging
 
-Run configure with the --enable-debug option, then make. Or run configure with
-CXXFLAGS="-g -ggdb -O0" or whatever debug flags you need.
+Run configure with `--enable-debug` to add additional compiler flags that
+produce better debugging builds.
 
-**debug.log**
+### Compiling for gprof profiling
+
+Run configure with the `--enable-gprof` option, then make.
+
+### debug.log
 
 If the code is behaving strangely, take a look in the debug.log file in the data directory;
 error and debugging messages are written there.
 
-The -debug=... command-line option controls debugging; running with just -debug or -debug=1 will turn
+The `-debug=...` command-line option controls debugging; running with just `-debug` or `-debug=1` will turn
 on all categories (and give you a very large debug.log file).
 
-The Qt code routes qDebug() output to debug.log under category "qt": run with -debug=qt
+The Qt code routes `qDebug()` output to debug.log under category "qt": run with `-debug=qt`
 to see it.
 
-**writing tests**
+### Writing tests
 
 For details on unit tests, see `unit-tests.md`
 
 For details on functional tests, see `functional-tests.md`
 
-**writing script integration tests**
+### Writing script integration tests
 
 Script integration tests are built using `src/test/script_tests.cpp`:
 
@@ -199,25 +244,57 @@ Script integration tests are built using `src/test/script_tests.cpp`:
 
 Please commit your TestBuilder along with your generated test JSON and cleanup the uncommented #define before code review.
 
-**testnet and regtest modes**
+### Testnet and Regtest modes
 
-Run with the -testnet option to run with "play bitcoins" on the test network, if you
+Run with the `-testnet` option to run with "play bitcoins" on the test network, if you
 are testing multi-machine code that needs to operate across the internet.
 
-If you are testing something that can run on one machine, run with the -regtest option.
-In regression test mode, blocks can be created on-demand; see test/functional/ for tests
-that run in -regtest mode.
+If you are testing something that can run on one machine, run with the `-regtest` option.
+In regression test mode, blocks can be created on-demand; see [test/functional/](/test/functional) for tests
+that run in `-regtest` mode.
 
-**DEBUG_LOCKORDER**
+### DEBUG_LOCKORDER
 
-Bitcoin Core is a multithreaded application, and deadlocks or other multithreading bugs
-can be very difficult to track down. Compiling with -DDEBUG_LOCKORDER (configure
-CXXFLAGS="-DDEBUG_LOCKORDER -g") inserts run-time checks to keep track of which locks
-are held, and adds warnings to the debug.log file if inconsistencies are detected.
+Bitcoin ABC is a multi-threaded application, and deadlocks or other
+multi-threading bugs can be very difficult to track down. The `--enable-debug`
+configure option adds `-DDEBUG_LOCKORDER` to the compiler flags. This inserts
+run-time checks to keep track of which locks are held, and adds warnings to the
+debug.log file if inconsistencies are detected.
 
-**Sanitizers**
+### Valgrind suppressions file
 
-Bitcoin can be compiled with various "sanitizers" enabled, which add
+Valgrind is a programming tool for memory debugging, memory leak detection, and
+profiling. The repo contains a Valgrind suppressions file
+([`valgrind.supp`](contrib/valgrind.supp))
+which includes known Valgrind warnings in our dependencies that cannot be fixed
+in-tree. Example use:
+
+```shell
+$ valgrind --suppressions=contrib/valgrind.supp src/test/test_bitcoin
+$ valgrind --suppressions=contrib/valgrind.supp --leak-check=full \
+      --show-leak-kinds=all src/test/test_bitcoin --log_level=test_suite
+$ valgrind -v --leak-check=full src/bitcoind -printtoconsole
+```
+
+### Compiling for test coverage
+
+LCOV can be used to generate a test coverage report based upon `make check`
+execution. LCOV must be installed on your system (e.g. the `lcov` package
+on Debian/Ubuntu).
+
+To enable LCOV report generation during test runs:
+
+```shell
+./configure --enable-lcov
+make
+make cov
+
+# A coverage report will now be accessible at `./test_bitcoin.coverage/index.html`.
+```
+
+### Sanitizers
+
+Bitcoin ABC can be compiled with various "sanitizers" enabled, which add
 instrumentation for issues regarding things like memory safety, thread race
 conditions, or undefined behavior. This is controlled with the
 `--with-sanitizers` configure flag, which should be a comma separated list of
@@ -270,18 +347,18 @@ Locking/mutex usage notes
 -------------------------
 
 The code is multi-threaded, and uses mutexes and the
-LOCK/TRY_LOCK macros to protect data structures.
+`LOCK` and `TRY_LOCK` macros to protect data structures.
 
-Deadlocks due to inconsistent lock ordering (thread 1 locks cs_main
-and then cs_wallet, while thread 2 locks them in the opposite order:
-result, deadlock as each waits for the other to release its lock) are
-a problem. Compile with -DDEBUG_LOCKORDER to get lock order
-inconsistencies reported in the debug.log file.
+Deadlocks due to inconsistent lock ordering (thread 1 locks `cs_main` and then
+`cs_wallet`, while thread 2 locks them in the opposite order: result, deadlock
+as each waits for the other to release its lock) are a problem. Compile with
+`-DDEBUG_LOCKORDER` (or use `--enable-debug`) to get lock order inconsistencies
+reported in the debug.log file.
 
 Re-architecting the core code so there are better-defined interfaces
 between the various components is a goal, with any necessary locking
-done by the components (e.g. see the self-contained CKeyStore class
-and its cs_KeyStore lock for example).
+done by the components (e.g. see the self-contained `CBasicKeyStore` class
+and its `cs_KeyStore` lock for example).
 
 Threads
 -------
@@ -498,6 +575,22 @@ TRY_LOCK(cs_vNodes, lockNodes);
 {
     ...
 }
+```
+
+Scripts
+--------------------------
+### Shebang
+- Use `#!/usr/bin/env bash` instead of obsolete `#!/bin/bash`.
+  - [*Rationale*](https://github.com/dylanaraps/pure-bash-bible#shebang):
+    `#!/bin/bash` assumes it is always installed to /bin/ which can cause issues;
+    `#!/usr/bin/env bash` searches the user's PATH to find the bash binary.
+  OK:
+```bash
+#!/usr/bin/env bash
+```
+  Wrong:
+```bash
+#!/bin/bash
 ```
 
 Source code organization

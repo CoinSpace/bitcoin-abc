@@ -7,9 +7,9 @@
 
 #include <amount.h>                 // For Amount
 #include <primitives/transaction.h> // For CTxOut
-#include <pubkey.h>                 // For CTxDestination (CKeyID and CScriptID)
-#include <script/ismine.h>          // For isminefilter, isminetype
-#include <script/standard.h>        // For CTxDestination
+#include <pubkey.h> // For CKeyID and CScriptID (definitions needed in CTxDestination instantiation)
+#include <script/ismine.h>             // For isminefilter, isminetype
+#include <script/standard.h>           // For CTxDestination
 #include <support/allocators/secure.h> // For SecureString
 #include <ui_interface.h>              // For ChangeType
 
@@ -70,6 +70,9 @@ public:
     virtual bool
     changeWalletPassphrase(const SecureString &old_wallet_passphrase,
                            const SecureString &new_wallet_passphrase) = 0;
+
+    //! Abort a rescan.
+    virtual void abortRescan() = 0;
 
     //! Back up wallet.
     virtual bool backupWallet(const std::string &filename) = 0;

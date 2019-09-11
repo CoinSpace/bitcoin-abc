@@ -3,15 +3,29 @@
 cmake_minimum_required(VERSION 3.5)
 project(secp256k1)
 
+# Add path for custom modules
+set(CMAKE_MODULE_PATH
+	${CMAKE_MODULE_PATH}
+	${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/modules
+)
+
+include(AddCompilerFlags)
+
 # libsecp256k1 use a different set of flags.
 add_compiler_flags(
 	-pedantic
+	-Wall
+	-Wextra
+	-Wcast-align
+	-Wshadow
 	-Wno-unused-function
 	-Wno-overlength-strings
 )
 
 add_c_compiler_flags(
 	-std=c89
+	-Wnested-externs
+	-Wstrict-prototypes
 	-Wno-long-long
 )
 
@@ -63,15 +77,15 @@ else()
 	# on 32bits implementations for field and scalar.
 endif()
 
-# Detect if we are on a 32 or 64 bits plateform and chose
-# scalar and filed implementation accordingly
+# Detect if we are on a 32 or 64 bits platform and chose
+# scalar and field implementation accordingly.
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-	# 64 bits implementationr require either __int128 or asm support.
+	# 64 bits implementation require either __int128 or asm support.
 	if (HAVE___INT128 OR USE_ASM_X86_64)
 		set(USE_SCALAR_4X64 1)
 		set(USE_FIELD_5X52 1)
 	else()
-		message(SEND_ERROR "Compiler does not support __int128 or insline assembly")
+		message(SEND_ERROR "Compiler does not support __int128 or inline assembly")
 	endif()
 else()
 	set(USE_SCALAR_8X32 1)
@@ -121,8 +135,8 @@ if(SECP256K1_ENABLE_MODULE_SCHNORR)
 	set(ENABLE_MODULE_SCHNORR 1)
 endif()
 
-# Static precomputation for eliptic curve mutliplication
-option(SECP256K1_ECMULT_STATIC_PRECOMPUTATION "Precompute libsecp256k1's eliptic curve mutliplication tables" ON)
+# Static precomputation for elliptic curve multiplication
+option(SECP256K1_ECMULT_STATIC_PRECOMPUTATION "Precompute libsecp256k1's elliptic curve multiplication tables" ON)
 if(SECP256K1_ECMULT_STATIC_PRECOMPUTATION)
 	set(USE_ECMULT_STATIC_PRECOMPUTATION 1)
 

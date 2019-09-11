@@ -7,6 +7,7 @@
 #include <config/bitcoin-config.h>
 #endif
 
+#include <fs.h>
 #include <util.h>
 
 #include <chainparamsbase.h>
@@ -43,6 +44,7 @@
 
 #include <algorithm>
 #include <fcntl.h>
+#include <sched.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 
@@ -202,12 +204,12 @@ bool DirIsWritable(const fs::path &directory) {
     return true;
 }
 
-bool CheckDiskSpace(const fs::path &dir, uint64_t nAdditionalBytes) {
+bool CheckDiskSpace(const fs::path &dir, uint64_t additional_bytes) {
     // 50 MiB
-    constexpr uint64_t nMinDiskSpace = 52428800;
+    constexpr uint64_t min_disk_space = 52428800;
 
-    uint64_t nFreeBytesAvailable = fs::space(dir).available;
-    return nFreeBytesAvailable >= nMinDiskSpace + nAdditionalBytes;
+    uint64_t free_bytes_available = fs::space(dir).available;
+    return free_bytes_available >= min_disk_space + additional_bytes;
 }
 
 /**
@@ -894,12 +896,7 @@ void ClearDatadirCache() {
 }
 
 fs::path GetConfigFile(const std::string &confPath) {
-    fs::path pathConfigFile(confPath);
-    if (!pathConfigFile.is_complete()) {
-        pathConfigFile = GetDataDir(false) / pathConfigFile;
-    }
-
-    return pathConfigFile;
+    return AbsPathForConfigVal(fs::path(confPath), false);
 }
 
 static std::string TrimString(const std::string &str,
@@ -1043,11 +1040,8 @@ std::string ArgsManager::GetChainName() const {
 
 #ifndef WIN32
 fs::path GetPidFile() {
-    fs::path pathPidFile(gArgs.GetArg("-pid", BITCOIN_PID_FILENAME));
-    if (!pathPidFile.is_complete()) {
-        pathPidFile = GetDataDir() / pathPidFile;
-    }
-    return pathPidFile;
+    return AbsPathForConfigVal(
+        fs::path(gArgs.GetArg("-pid", BITCOIN_PID_FILENAME)));
 }
 
 void CreatePidFile(const fs::path &path, pid_t pid) {
@@ -1108,7 +1102,7 @@ bool FileCommit(FILE *file) {
         LogPrintf("%s: fdatasync failed: %d\n", __func__, errno);
         return false;
     }
-#elif defined(__APPLE__) && defined(F_FULLFSYNC)
+#elif defined(MAC_OSX) && defined(F_FULLFSYNC)
     // Manpage says "value other than -1" is returned on success
     if (fcntl(fileno(file), F_FULLFSYNC, 0) == -1) {
         LogPrintf("%s: fcntl F_FULLFSYNC failed: %d\n", __func__, errno);
@@ -1313,4 +1307,21 @@ std::string CopyrightHolders(const std::string &strPrefix) {
 // Obtain the application startup time (used for uptime calculation)
 int64_t GetStartupTime() {
     return nStartupTime;
+}
+
+fs::path AbsPathForConfigVal(const fs::path &path, bool net_specific) {
+    return fs::absolute(path, GetDataDir(net_specific));
+}
+
+int ScheduleBatchPriority() {
+#ifdef SCHED_BATCH
+    const static sched_param param{0};
+    if (int ret = pthread_setschedparam(pthread_self(), SCHED_BATCH, &param)) {
+        LogPrintf("Failed to pthread_setschedparam: %s\n", strerror(errno));
+        return ret;
+    }
+    return 0;
+#else
+    return 1;
+#endif
 }

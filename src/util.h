@@ -75,7 +75,7 @@ bool RenameOver(fs::path src, fs::path dest);
 bool LockDirectory(const fs::path &directory, const std::string lockfile_name,
                    bool probe_only = false);
 bool DirIsWritable(const fs::path &directory);
-bool CheckDiskSpace(const fs::path &dir, uint64_t nAdditionalBytes = 0);
+bool CheckDiskSpace(const fs::path &dir, uint64_t additional_bytes = 0);
 
 /**
  * Release all directory locks. This is used for unit testing only, at runtime
@@ -98,6 +98,16 @@ void CreatePidFile(const fs::path &path, pid_t pid);
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
 void runCommand(const std::string &strCommand);
+
+/**
+ * Most paths passed as configuration arguments are treated as relative to
+ * the datadir if they are not absolute.
+ *
+ * @param path The path to be conditionally prefixed with datadir.
+ * @param net_specific Forwarded to GetDataDir().
+ * @return The normalized path.
+ */
+fs::path AbsPathForConfigVal(const fs::path &path, bool net_specific = true);
 
 inline bool IsSwitchChar(char c) {
 #ifdef WIN32
@@ -353,5 +363,14 @@ inline void insert(std::set<TsetT> &dst, const Tsrc &src) {
 }
 
 } // namespace util
+
+/**
+ * On platforms that support it, tell the kernel the calling thread is
+ * CPU-intensive and non-interactive. See SCHED_BATCH in sched(7) for details.
+ *
+ * @return The return value of sched_setschedule(), or 1 on systems without
+ * sched_setchedule().
+ */
+int ScheduleBatchPriority();
 
 #endif // BITCOIN_UTIL_H

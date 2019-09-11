@@ -194,6 +194,12 @@ enum opcodetype {
 
 const char *GetOpName(opcodetype opcode);
 
+/**
+ * Check whether the given stack element data would be minimally pushed using
+ * the given opcode.
+ */
+bool CheckMinimalPush(const std::vector<uint8_t> &data, opcodetype opcode);
+
 class scriptnum_error : public std::runtime_error {
 public:
     explicit scriptnum_error(const std::string &str)
@@ -623,16 +629,6 @@ public:
             *this = result;
         }
 
-        return nFound;
-    }
-    int Find(opcodetype op) const {
-        int nFound = 0;
-        opcodetype opcode;
-        for (const_iterator pc = begin(); pc != end() && GetOp(pc, opcode);) {
-            if (opcode == op) {
-                ++nFound;
-            }
-        }
         return nFound;
     }
 

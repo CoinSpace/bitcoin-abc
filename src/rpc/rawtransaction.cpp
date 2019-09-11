@@ -1084,8 +1084,9 @@ UniValue SignTransaction(CMutableTransaction &mtx,
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if ((sigHashType.getBaseType() != BaseSigHashType::SINGLE) ||
             (i < mtx.vout.size())) {
-            ProduceSignature(MutableTransactionSignatureCreator(
-                                 keystore, &mtx, i, amount, sigHashType),
+            ProduceSignature(*keystore,
+                             MutableTransactionSignatureCreator(&mtx, i, amount,
+                                                                sigHashType),
                              prevPubKey, sigdata);
         }
         sigdata = CombineSignatures(
@@ -1353,19 +1354,20 @@ static UniValue signrawtransaction(const Config &config,
         new_request.params.push_back(request.params[1]);
         new_request.params.push_back(request.params[3]);
         return signrawtransactionwithkey(config, new_request);
-    }
-// Otherwise sign with the wallet which does not take a privkeys parameter
+    } else {
 #ifdef ENABLE_WALLET
-    else {
+        // Otherwise sign with the wallet which does not take a privkeys
+        // parameter
         new_request.params.push_back(request.params[0]);
         new_request.params.push_back(request.params[1]);
         new_request.params.push_back(request.params[3]);
         return signrawtransactionwithwallet(config, new_request);
-    }
+#else
+        // If we have made it this far, then wallet is disabled and no private
+        // keys were given, so fail here.
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No private keys available.");
 #endif
-    // If we have made it this far, then wallet is disabled and no private keys
-    // were given, so fail here.
-    throw JSONRPCError(RPC_INVALID_PARAMETER, "No private keys available.");
+    }
 }
 
 static UniValue sendrawtransaction(const Config &config,

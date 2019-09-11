@@ -6,7 +6,6 @@
 #include <script/sign.h>
 
 #include <key.h>
-#include <keystore.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <script/standard.h>
@@ -15,17 +14,17 @@
 typedef std::vector<uint8_t> valtype;
 
 TransactionSignatureCreator::TransactionSignatureCreator(
-    const CKeyStore *keystoreIn, const CTransaction *txToIn, unsigned int nInIn,
-    const Amount amountIn, SigHashType sigHashTypeIn)
-    : BaseSignatureCreator(keystoreIn), txTo(txToIn), nIn(nInIn),
-      amount(amountIn), sigHashType(sigHashTypeIn),
+    const CTransaction *txToIn, unsigned int nInIn, const Amount amountIn,
+    SigHashType sigHashTypeIn)
+    : txTo(txToIn), nIn(nInIn), amount(amountIn), sigHashType(sigHashTypeIn),
       checker(txTo, nIn, amountIn) {}
 
-bool TransactionSignatureCreator::CreateSig(std::vector<uint8_t> &vchSig,
+bool TransactionSignatureCreator::CreateSig(const SigningProvider &provider,
+                                            std::vector<uint8_t> &vchSig,
                                             const CKeyID &address,
                                             const CScript &scriptCode) const {
     CKey key;
-    if (!keystore->GetKey(address, key)) {
+    if (!provider.GetKey(address, key)) {
         return false;
     }
 
@@ -38,10 +37,11 @@ bool TransactionSignatureCreator::CreateSig(std::vector<uint8_t> &vchSig,
     return true;
 }
 
-static bool Sign1(const CKeyID &address, const BaseSignatureCreator &creator,
+static bool Sign1(const SigningProvider &provider, const CKeyID &address,
+                  const BaseSignatureCreator &creator,
                   const CScript &scriptCode, std::vector<valtype> &ret) {
     std::vector<uint8_t> vchSig;
-    if (!creator.CreateSig(vchSig, address, scriptCode)) {
+    if (!creator.CreateSig(provider, vchSig, address, scriptCode)) {
         return false;
     }
 
@@ -49,7 +49,8 @@ static bool Sign1(const CKeyID &address, const BaseSignatureCreator &creator,
     return true;
 }
 
-static bool SignN(const std::vector<valtype> &multisigdata,
+static bool SignN(const SigningProvider &provider,
+                  const std::vector<valtype> &multisigdata,
                   const BaseSignatureCreator &creator,
                   const CScript &scriptCode, std::vector<valtype> &ret) {
     int nSigned = 0;
@@ -58,7 +59,7 @@ static bool SignN(const std::vector<valtype> &multisigdata,
          i++) {
         const valtype &pubkey = multisigdata[i];
         CKeyID keyID = CPubKey(pubkey).GetID();
-        if (Sign1(keyID, creator, scriptCode, ret)) {
+        if (Sign1(provider, keyID, creator, scriptCode, ret)) {
             ++nSigned;
         }
     }
@@ -73,7 +74,8 @@ static bool SignN(const std::vector<valtype> &multisigdata,
  * scriptSigRet is the redemption script.
  * Returns false if scriptPubKey could not be completely satisfied.
  */
-static bool SignStep(const BaseSignatureCreator &creator,
+static bool SignStep(const SigningProvider &provider,
+                     const BaseSignatureCreator &creator,
                      const CScript &scriptPubKey, std::vector<valtype> &ret,
                      txnouttype &whichTypeRet) {
     CScript scriptRet;
@@ -92,33 +94,29 @@ static bool SignStep(const BaseSignatureCreator &creator,
             return false;
         case TX_PUBKEY:
             keyID = CPubKey(vSolutions[0]).GetID();
-            return Sign1(keyID, creator, scriptPubKey, ret);
+            return Sign1(provider, keyID, creator, scriptPubKey, ret);
         case TX_PUBKEYHASH: {
             keyID = CKeyID(uint160(vSolutions[0]));
-            if (!Sign1(keyID, creator, scriptPubKey, ret)) {
+            if (!Sign1(provider, keyID, creator, scriptPubKey, ret)) {
                 return false;
             }
 
             CPubKey vch;
-            creator.KeyStore().GetPubKey(keyID, vch);
+            provider.GetPubKey(keyID, vch);
             ret.push_back(ToByteVector(vch));
             return true;
         }
         case TX_SCRIPTHASH:
-            if (creator.KeyStore().GetCScript(uint160(vSolutions[0]),
-                                              scriptRet)) {
+            if (provider.GetCScript(uint160(vSolutions[0]), scriptRet)) {
                 ret.push_back(
                     std::vector<uint8_t>(scriptRet.begin(), scriptRet.end()));
                 return true;
             }
-
             return false;
-
         case TX_MULTISIG:
             // workaround CHECKMULTISIG bug
             ret.push_back(valtype());
-            return (SignN(vSolutions, creator, scriptPubKey, ret));
-
+            return (SignN(provider, vSolutions, creator, scriptPubKey, ret));
         default:
             return false;
     }
@@ -139,11 +137,12 @@ static CScript PushAll(const std::vector<valtype> &values) {
     return result;
 }
 
-bool ProduceSignature(const BaseSignatureCreator &creator,
+bool ProduceSignature(const SigningProvider &provider,
+                      const BaseSignatureCreator &creator,
                       const CScript &fromPubKey, SignatureData &sigdata) {
     std::vector<valtype> result;
     txnouttype whichType;
-    bool solved = SignStep(creator, fromPubKey, result, whichType);
+    bool solved = SignStep(provider, creator, fromPubKey, result, whichType);
     CScript subscript;
 
     if (solved && whichType == TX_SCRIPTHASH) {
@@ -151,7 +150,8 @@ bool ProduceSignature(const BaseSignatureCreator &creator,
         // scriptSig is the signatures from that and then the serialized
         // subscript:
         subscript = CScript(result[0].begin(), result[0].end());
-        solved = solved && SignStep(creator, subscript, result, whichType) &&
+        solved = solved &&
+                 SignStep(provider, creator, subscript, result, whichType) &&
                  whichType != TX_SCRIPTHASH;
         result.push_back(
             std::vector<uint8_t>(subscript.begin(), subscript.end()));
@@ -183,22 +183,21 @@ void UpdateTransaction(CMutableTransaction &tx, unsigned int nIn,
     UpdateInput(tx.vin[nIn], data);
 }
 
-bool SignSignature(const CKeyStore &keystore, const CScript &fromPubKey,
+bool SignSignature(const SigningProvider &provider, const CScript &fromPubKey,
                    CMutableTransaction &txTo, unsigned int nIn,
                    const Amount amount, SigHashType sigHashType) {
     assert(nIn < txTo.vin.size());
 
     CTransaction txToConst(txTo);
-    TransactionSignatureCreator creator(&keystore, &txToConst, nIn, amount,
-                                        sigHashType);
+    TransactionSignatureCreator creator(&txToConst, nIn, amount, sigHashType);
 
     SignatureData sigdata;
-    bool ret = ProduceSignature(creator, fromPubKey, sigdata);
+    bool ret = ProduceSignature(provider, creator, fromPubKey, sigdata);
     UpdateTransaction(txTo, nIn, sigdata);
     return ret;
 }
 
-bool SignSignature(const CKeyStore &keystore, const CTransaction &txFrom,
+bool SignSignature(const SigningProvider &provider, const CTransaction &txFrom,
                    CMutableTransaction &txTo, unsigned int nIn,
                    SigHashType sigHashType) {
     assert(nIn < txTo.vin.size());
@@ -206,7 +205,7 @@ bool SignSignature(const CKeyStore &keystore, const CTransaction &txFrom,
     assert(txin.prevout.GetN() < txFrom.vout.size());
     const CTxOut &txout = txFrom.vout[txin.prevout.GetN()];
 
-    return SignSignature(keystore, txout.scriptPubKey, txTo, nIn, txout.nValue,
+    return SignSignature(provider, txout.scriptPubKey, txTo, nIn, txout.nValue,
                          sigHashType);
 }
 
@@ -356,36 +355,40 @@ SignatureData CombineSignatures(const CScript &scriptPubKey,
 
 namespace {
 /** Dummy signature checker which accepts all signatures. */
-class DummySignatureChecker : public BaseSignatureChecker {
+class DummySignatureChecker final : public BaseSignatureChecker {
 public:
     DummySignatureChecker() {}
-
     bool CheckSig(const std::vector<uint8_t> &scriptSig,
                   const std::vector<uint8_t> &vchPubKey,
                   const CScript &scriptCode, uint32_t flags) const override {
         return true;
     }
 };
-const DummySignatureChecker dummyChecker;
+const DummySignatureChecker DUMMY_CHECKER;
+
+class DummySignatureCreator final : public BaseSignatureCreator {
+public:
+    DummySignatureCreator() {}
+    const BaseSignatureChecker &Checker() const override {
+        return DUMMY_CHECKER;
+    }
+    bool CreateSig(const SigningProvider &provider,
+                   std::vector<uint8_t> &vchSig, const CKeyID &keyid,
+                   const CScript &scriptCode) const {
+        // Create a dummy signature that is a valid DER-encoding
+        vchSig.assign(72, '\000');
+        vchSig[0] = 0x30;
+        vchSig[1] = 69;
+        vchSig[2] = 0x02;
+        vchSig[3] = 33;
+        vchSig[4] = 0x01;
+        vchSig[4 + 33] = 0x02;
+        vchSig[5 + 33] = 32;
+        vchSig[6 + 33] = 0x01;
+        vchSig[6 + 33 + 32] = SIGHASH_ALL | SIGHASH_FORKID;
+        return true;
+    }
+};
 } // namespace
 
-const BaseSignatureChecker &DummySignatureCreator::Checker() const {
-    return dummyChecker;
-}
-
-bool DummySignatureCreator::CreateSig(std::vector<uint8_t> &vchSig,
-                                      const CKeyID &keyid,
-                                      const CScript &scriptCode) const {
-    // Create a dummy signature that is a valid DER-encoding
-    vchSig.assign(72, '\000');
-    vchSig[0] = 0x30;
-    vchSig[1] = 69;
-    vchSig[2] = 0x02;
-    vchSig[3] = 33;
-    vchSig[4] = 0x01;
-    vchSig[4 + 33] = 0x02;
-    vchSig[5 + 33] = 32;
-    vchSig[6 + 33] = 0x01;
-    vchSig[6 + 33 + 32] = SIGHASH_ALL | SIGHASH_FORKID;
-    return true;
-}
+const BaseSignatureCreator &DUMMY_SIGNATURE_CREATOR = DummySignatureCreator();

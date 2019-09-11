@@ -65,14 +65,6 @@
 // These Mac includes must be done in the global namespace
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreServices/CoreServices.h>
-
-extern double NSAppKitVersionNumber;
-#if !defined(NSAppKitVersionNumber10_8)
-#define NSAppKitVersionNumber10_8 1187
-#endif
-#if !defined(NSAppKitVersionNumber10_9)
-#define NSAppKitVersionNumber10_9 1265
-#endif
 #endif
 
 namespace GUIUtil {
@@ -147,14 +139,6 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent) {
     widget->setValidator(
         new BitcoinAddressEntryValidator(Params().CashAddrPrefix(), parent));
     widget->setCheckValidator(new BitcoinAddressCheckValidator(parent));
-}
-
-void setupAmountWidget(QLineEdit *widget, QWidget *parent) {
-    QDoubleValidator *amountValidator = new QDoubleValidator(parent);
-    amountValidator->setDecimals(8);
-    amountValidator->setBottom(0.0);
-    widget->setValidator(amountValidator);
-    widget->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 }
 
 bool parseBitcoinURI(const QString &scheme, const QUrl &uri,
@@ -397,7 +381,8 @@ void openDebugLogfile() {
 }
 
 bool openBitcoinConf() {
-    fs::path pathConfig = GetConfigFile(BITCOIN_CONF_FILENAME);
+    fs::path pathConfig =
+        GetConfigFile(gArgs.GetArg("-conf", BITCOIN_CONF_FILENAME));
 
     /* Create the file */
     fs::ofstream configFile(pathConfig, std::ios_base::app);
@@ -411,48 +396,6 @@ bool openBitcoinConf() {
     /* Open bitcoin.conf with the associated application */
     return QDesktopServices::openUrl(
         QUrl::fromLocalFile(boostPathToQString(pathConfig)));
-}
-
-void SubstituteFonts(const QString &language) {
-#if defined(Q_OS_MAC)
-// Background:
-// OSX's default font changed in 10.9 and Qt is unable to find it with its
-// usual fallback methods when building against the 10.7 sdk or lower.
-// The 10.8 SDK added a function to let it find the correct fallback font.
-// If this fallback is not properly loaded, some characters may fail to
-// render correctly.
-//
-// The same thing happened with 10.10. .Helvetica Neue DeskInterface is now
-// default.
-//
-// Solution: If building with the 10.7 SDK or lower and the user's platform
-// is 10.9 or higher at runtime, substitute the correct font. This needs to
-// happen before the QApplication is created.
-#if defined(MAC_OS_X_VERSION_MAX_ALLOWED) &&                                   \
-    MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_8
-    if (floor(NSAppKitVersionNumber) > NSAppKitVersionNumber10_8) {
-        if (floor(NSAppKitVersionNumber) <= NSAppKitVersionNumber10_9) {
-            /* On a 10.9 - 10.9.x system */
-            QFont::insertSubstitution(".Lucida Grande UI", "Lucida Grande");
-        } else {
-            /* 10.10 or later system */
-            if (language == "zh_CN" || language == "zh_TW" ||
-                language == "zh_HK") {
-                // traditional or simplified Chinese
-                QFont::insertSubstitution(".Helvetica Neue DeskInterface",
-                                          "Heiti SC");
-            } else if (language == "ja") {
-                // Japanese
-                QFont::insertSubstitution(".Helvetica Neue DeskInterface",
-                                          "Songti SC");
-            } else {
-                QFont::insertSubstitution(".Helvetica Neue DeskInterface",
-                                          "Lucida Grande");
-            }
-        }
-    }
-#endif
-#endif
 }
 
 ToolTipToRichTextFilter::ToolTipToRichTextFilter(int _size_threshold,
@@ -731,11 +674,12 @@ bool SetStartOnSystemStartup(bool fAutoStart) {
         fs::remove(GetAutostartFilePath());
     } else {
         char pszExePath[MAX_PATH + 1];
-        memset(pszExePath, 0, sizeof(pszExePath));
-        if (readlink("/proc/self/exe", pszExePath, sizeof(pszExePath) - 1) ==
-            -1) {
+        ssize_t r =
+            readlink("/proc/self/exe", pszExePath, sizeof(pszExePath) - 1);
+        if (r == -1) {
             return false;
         }
+        pszExePath[r] = '\0';
 
         fs::create_directories(GetAutostartDir());
 
