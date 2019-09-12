@@ -2224,18 +2224,6 @@ bool CChainState::ConnectBlock(const Config &config, const CBlock &block,
              MILLI * (nTime6 - nTime5), nTimeCallbacks * MICRO,
              nTimeCallbacks * MILLI / nBlocksTotal);
 
-    // Check whether we have an address index  
-    pblocktree->ReadFlag("addressindex", fAddressIndex);
-    LogPrintf("%s: address index %s\n", __func__, fAddressIndex ? "enabled" : "disabled");  
-
-    // Check whether we have a timestamp index  
-    pblocktree->ReadFlag("timestampindex", fTimestampIndex);  
-    LogPrintf("%s: timestamp index %s\n", __func__, fTimestampIndex ? "enabled" : "disabled");  
-
-    // Check whether we have a spent index  
-    pblocktree->ReadFlag("spentindex", fSpentIndex);  
-    LogPrintf("%s: spent index %s\n", __func__, fSpentIndex ? "enabled" : "disabled"); 
-
     return true;
 }
 
